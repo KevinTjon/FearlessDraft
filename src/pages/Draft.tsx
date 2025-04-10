@@ -32,6 +32,9 @@ interface DraftState {
   redConnected: boolean;
   pendingChampion: Champion | null;
   pendingTeam: Team | null;
+  isSwapPhase: boolean;
+  swapTimeLeft: number;
+  canSwap: boolean;
 }
 
 const Draft = () => {
@@ -44,6 +47,9 @@ const Draft = () => {
   // Draft state
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [isDraftComplete, setIsDraftComplete] = useState(false);
+  const [isSwapPhase, setIsSwapPhase] = useState(false);
+  const [swapTimeLeft, setSwapTimeLeft] = useState(60);
+  const [canSwap, setCanSwap] = useState(true);
   const lastHandledPhase = useRef<number>(-1);
   const pendingTimeUp = useRef<boolean>(false);
   const latestDraftState = useRef<DraftState | null>(null);
@@ -210,6 +216,26 @@ const Draft = () => {
         
         latestDraftState.current = updatedState;
         return updatedState;
+      });
+    });
+
+    // Listen for team reorder events
+    socketService.onTeamReorder(({ team: reorderTeam, sourceIndex, targetIndex }) => {
+      setDraftState(prev => {
+        if (!prev) return prev;
+        
+        const picks = reorderTeam === "BLUE" ? [...prev.bluePicks] : [...prev.redPicks];
+        
+        // Perform direct swap
+        const temp = picks[sourceIndex];
+        picks[sourceIndex] = picks[targetIndex];
+        picks[targetIndex] = temp;
+        
+        return {
+          ...prev,
+          bluePicks: reorderTeam === "BLUE" ? picks : prev.bluePicks,
+          redPicks: reorderTeam === "RED" ? picks : prev.redPicks
+        };
       });
     });
 
@@ -470,11 +496,50 @@ const Draft = () => {
       blueConnected: false,
       redConnected: false,
       pendingChampion: null,
-      pendingTeam: null
+      pendingTeam: null,
+      isSwapPhase: false,
+      swapTimeLeft: 60,
+      canSwap: true
     };
     setDraftState(initialState);
     setIsLoading(false);
   }, [draftId]);
+
+  // Add new functions to handle reordering
+  const handleBlueTeamReorder = (sourceIndex: number, targetIndex: number) => {
+    if (!isDraftComplete || !draftId) return;
+    
+    // Send reorder event through socket
+    socketService.reorderTeam(draftId, "BLUE", sourceIndex, targetIndex);
+  };
+
+  const handleRedTeamReorder = (sourceIndex: number, targetIndex: number) => {
+    if (!isDraftComplete || !draftId) return;
+    
+    // Send reorder event through socket
+    socketService.reorderTeam(draftId, "RED", sourceIndex, targetIndex);
+  };
+
+  // Effect to handle swap phase timer
+  useEffect(() => {
+    if (isDraftComplete && !isSwapPhase) {
+      setIsSwapPhase(true);
+      setSwapTimeLeft(60);
+      setCanSwap(true);
+    }
+
+    if (isSwapPhase) {
+      const timer = setInterval(() => {
+        setSwapTimeLeft((prev) => {
+          if (prev <= 0) return 0;
+          if (prev === 20) setCanSwap(false);
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [isDraftComplete, isSwapPhase]);
 
   if (isLoading) {
     return (
@@ -681,9 +746,14 @@ const Draft = () => {
 
   // The actual draft interface
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-lol-dark">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-lol-dark overflow-hidden">
       {/* Left sidebar - Blue team */}
-      <div className="lg:col-span-2 bg-blue-900 bg-opacity-20 p-4 flex items-center justify-start w-[300px]">
+      <div className={`
+        transition-all duration-700 ease-in-out
+        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-2'}
+        bg-blue-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-start
+        min-h-[200px] lg:min-h-screen
+      `}>
         <TeamComposition 
           team="BLUE"
           teamName={draftState.blueTeamName}
@@ -699,43 +769,75 @@ const Draft = () => {
           isPickPhase={!isDraftComplete && draftSequence[draftState.currentPhaseIndex]?.type === "PICK"}
           pendingChampion={draftState.pendingTeam === "BLUE" && draftSequence[draftState.currentPhaseIndex]?.type === "PICK" ? draftState.pendingChampion : null}
           isMyTeam={team === "BLUE"}
+          isDraftComplete={isDraftComplete}
+          isSwapPhase={isSwapPhase}
+          canSwap={canSwap}
+          onReorder={handleBlueTeamReorder}
         />
       </div>
       
       {/* Main content */}
-      <div className="lg:col-span-8 p-4 flex flex-col h-screen">
-        <div className="mb-4">
-          {draftState.inProgress && !isDraftComplete && (
-            <div className="flex justify-center">
-              <DraftTimer 
-                key={draftState.currentPhaseIndex}
-                isActive={true}
-                team={draftSequence[draftState.currentPhaseIndex]?.team || "BLUE"}
-                teamName={draftSequence[draftState.currentPhaseIndex]?.team === "BLUE" ? draftState.blueTeamName : draftState.redTeamName}
-                onTimeUp={handleTimeUp}
-                durationSeconds={30}
-                currentPhase={draftState.currentPhaseIndex}
-              />
+      <div className={`
+        transition-all duration-700 ease-in-out
+        ${isDraftComplete ? 'lg:col-span-6' : 'lg:col-span-8'}
+        p-2 sm:p-4 flex flex-col min-h-screen
+      `}>
+        <div className="flex-none">
+          {(isDraftComplete || isSwapPhase) && (
+            <div className="mb-2 sm:mb-4 text-center animate-fade-in">
+              <h2 className="text-xl sm:text-2xl font-bold text-lol-gold">
+                {isSwapPhase ? "Swap Phase" : "Draft Complete!"}
+              </h2>
+              {isSwapPhase && (
+                <div className="mt-1 sm:mt-2">
+                  <div className="text-base sm:text-lg text-lol-text">
+                    Time remaining: <span className={swapTimeLeft <= 20 ? "text-red-500" : "text-lol-gold"}>{swapTimeLeft}s</span>
+                  </div>
+                  {swapTimeLeft <= 20 && (
+                    <div className="text-sm text-red-500 mt-1">
+                      Swapping locked
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
-        </div>
-        
-        <div className="mb-4">
-          <BanPhase
-            blueTeamBans={draftState.blueBans}
-            redTeamBans={draftState.redBans}
-            blueTeamName={draftState.blueTeamName}
-            redTeamName={draftState.redTeamName}
-            isPickPhase={draftSequence[draftState.currentPhaseIndex]?.type === "PICK"}
-            currentPhase={draftState.currentPhaseIndex}
-            pendingChampion={draftSequence[draftState.currentPhaseIndex]?.type === "BAN" ? draftState.pendingChampion : null}
-            isMyTeam={draftSequence[draftState.currentPhaseIndex]?.team === team}
-            team={team}
-            pendingTeam={draftSequence[draftState.currentPhaseIndex]?.type === "BAN" ? draftState.pendingTeam : null}
-          />
+          <div className="mb-2 sm:mb-4">
+            {draftState.inProgress && !isDraftComplete && (
+              <div className="flex justify-center">
+                <DraftTimer 
+                  key={draftState.currentPhaseIndex}
+                  isActive={true}
+                  team={draftSequence[draftState.currentPhaseIndex]?.team || "BLUE"}
+                  teamName={draftSequence[draftState.currentPhaseIndex]?.team === "BLUE" ? draftState.blueTeamName : draftState.redTeamName}
+                  onTimeUp={handleTimeUp}
+                  durationSeconds={30}
+                  currentPhase={draftState.currentPhaseIndex}
+                />
+              </div>
+            )}
+          </div>
+          
+          <div className="mb-2 sm:mb-4">
+            <BanPhase
+              blueTeamBans={draftState.blueBans}
+              redTeamBans={draftState.redBans}
+              blueTeamName={draftState.blueTeamName}
+              redTeamName={draftState.redTeamName}
+              isPickPhase={draftSequence[draftState.currentPhaseIndex]?.type === "PICK"}
+              currentPhase={draftState.currentPhaseIndex}
+              pendingChampion={draftSequence[draftState.currentPhaseIndex]?.type === "BAN" ? draftState.pendingChampion : null}
+              isMyTeam={draftSequence[draftState.currentPhaseIndex]?.team === team}
+              team={team}
+              pendingTeam={draftSequence[draftState.currentPhaseIndex]?.type === "BAN" ? draftState.pendingTeam : null}
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className={`
+          flex-1 overflow-hidden transition-all duration-700 ease-in-out
+          ${isDraftComplete ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}
+        `}>
           <ChampionGrid
             champions={champions}
             onChampionSelect={handleChampionSelect}
@@ -747,21 +849,18 @@ const Draft = () => {
             isMyTurn={!isDraftComplete && draftSequence[draftState.currentPhaseIndex]?.team === team}
             currentTeamName={team === "BLUE" ? draftState.blueTeamName : draftState.redTeamName}
             isPickPhase={draftSequence[draftState.currentPhaseIndex]?.type === "PICK"}
+            isDraftComplete={isDraftComplete}
           />
         </div>
-
-        {isDraftComplete && (
-          <div className="mt-4 text-center">
-            <h2 className="text-xl font-bold text-lol-gold mb-2">Draft Complete!</h2>
-            <p className="text-lol-text">
-              {draftState.blueTeamName} vs {draftState.redTeamName}
-            </p>
-          </div>
-        )}
       </div>
       
       {/* Right sidebar - Red team */}
-      <div className="lg:col-span-2 bg-red-900 bg-opacity-20 p-4 flex items-center justify-end w-[300px] ml-auto">
+      <div className={`
+        transition-all duration-700 ease-in-out
+        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-2'}
+        bg-red-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-end ml-auto
+        min-h-[200px] lg:min-h-screen
+      `}>
         <TeamComposition 
           team="RED"
           teamName={draftState.redTeamName}
@@ -777,6 +876,10 @@ const Draft = () => {
           isPickPhase={!isDraftComplete && draftSequence[draftState.currentPhaseIndex]?.type === "PICK"}
           pendingChampion={draftState.pendingTeam === "RED" && draftSequence[draftState.currentPhaseIndex]?.type === "PICK" ? draftState.pendingChampion : null}
           isMyTeam={team === "RED"}
+          isDraftComplete={isDraftComplete}
+          isSwapPhase={isSwapPhase}
+          canSwap={canSwap}
+          onReorder={handleRedTeamReorder}
         />
       </div>
     </div>

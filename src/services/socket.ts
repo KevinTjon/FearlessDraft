@@ -85,6 +85,14 @@ const setPendingSelection = (draftId: string, champion: Champion | null, team: T
   socket?.emit('setPendingSelection', { draftId, champion, team });
 };
 
+const reorderTeam = (draftId: string, team: Team, sourceIndex: number, targetIndex: number) => {
+  socket?.emit('reorderTeam', { draftId, team, sourceIndex, targetIndex });
+};
+
+const onTeamReorder = (callback: (data: { team: Team, sourceIndex: number, targetIndex: number }) => void) => {
+  socket?.on('teamReorder', callback);
+};
+
 const onPendingSelectionUpdate = (callback: (data: { champion: Champion | null, team: Team }) => void) => {
   socket?.on('pendingSelectionUpdate', callback);
 };
@@ -109,6 +117,8 @@ export const socketService = {
   toggleReady,
   selectChampion,
   setPendingSelection,
+  reorderTeam,
+  onTeamReorder,
   onPendingSelectionUpdate,
   onDraftStateUpdate,
   onDraftComplete,

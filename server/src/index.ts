@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { DraftPhase, Team, draftSequence } from './types/draftTypes.js';
-import { Champion } from '../../src/data/champions.js';
+import { Champion } from './types/champions.js';
 import express from 'express';
 import cors from 'cors';
 
@@ -23,6 +23,9 @@ interface DraftSession {
   timer: NodeJS.Timeout | null;
   pendingChampion: Champion | null;
   pendingTeam: Team | null;
+  isSwapPhase: boolean;
+  swapTimeLeft: number;
+  canSwap: boolean;
 }
 
 const app = express();
@@ -55,9 +58,56 @@ function startDraftTimer(draftId: string) {
 
   // Check if we've reached the end of the draft
   if (session.currentPhaseIndex >= draftSequence.length) {
-    console.log('Draft complete, no timer needed:', { phase: session.currentPhaseIndex });
+    console.log('Draft complete, starting swap phase:', { phase: session.currentPhaseIndex });
     session.inProgress = false;
-    io.to(draftId).emit('draftComplete', session);
+    session.isSwapPhase = true;
+    session.swapTimeLeft = 60;
+    session.canSwap = true;
+    
+    // Clear any existing timer
+    if (session.timer) {
+      clearTimeout(session.timer);
+      session.timer = null;
+    }
+    
+    // Create a clean state object for sending
+    const cleanState = {
+      ...session,
+      timer: null // Ensure timer is null in the sent state
+    };
+    
+    // Start swap phase timer
+    const swapTimer = setInterval(() => {
+      const currentSession = draftSessions.get(draftId);
+      if (!currentSession) {
+        clearInterval(swapTimer);
+        return;
+      }
+      
+      currentSession.swapTimeLeft--;
+      
+      if (currentSession.swapTimeLeft === 20) {
+        currentSession.canSwap = false;
+      }
+      
+      if (currentSession.swapTimeLeft <= 0) {
+        clearInterval(swapTimer);
+        currentSession.swapTimeLeft = 0;
+        currentSession.timer = null;
+      }
+      
+      // Send clean state without timer
+      io.to(draftId).emit('draftStateUpdate', {
+        ...currentSession,
+        timer: null
+      });
+    }, 1000);
+    
+    session.timer = swapTimer;
+    
+    // Emit clean state objects
+    io.to(draftId).emit('draftComplete', cleanState);
+    io.to(draftId).emit('draftStateUpdate', cleanState);
     return;
   }
 
@@ -138,18 +188,19 @@ io.on('connection', (socket) => {
         redConnected: team === 'RED',
         timer: null,
         pendingChampion: null,
-        pendingTeam: null
+        pendingTeam: null,
+        isSwapPhase: false,
+        swapTimeLeft: 60,
+        canSwap: true
       };
       draftSessions.set(draftId, newSession);
       currentDraftId = draftId;
       currentTeam = team;
       socket.join(draftId);
 
-      const sessionUpdate = {
-        ...newSession,
-        timer: null
-      };
-      io.to(draftId).emit('draftStateUpdate', sessionUpdate);
+      // Send clean state
+      const cleanState = { ...newSession, timer: null };
+      io.to(draftId).emit('draftStateUpdate', cleanState);
       return;
     }
 
@@ -164,14 +215,9 @@ io.on('connection', (socket) => {
     currentTeam = team;
     socket.join(draftId);
 
-    // Wait a short moment to ensure join is complete
-    setTimeout(() => {
-      const sessionUpdate = {
-        ...session,
-        timer: null
-      };
-      io.to(draftId).emit('draftStateUpdate', sessionUpdate);
-    }, 100);
+    // Send clean state
+    const cleanState = { ...session, timer: null };
+    io.to(draftId).emit('draftStateUpdate', cleanState);
   });
 
   socket.on('createDraft', ({ draftId, blueTeamName, redTeamName }: { draftId: string; blueTeamName: string; redTeamName: string }) => {
@@ -196,7 +242,10 @@ io.on('connection', (socket) => {
         redConnected: false,
         timer: null,
         pendingChampion: null,
-        pendingTeam: null
+        pendingTeam: null,
+        isSwapPhase: false,
+        swapTimeLeft: 60,
+        canSwap: true
       };
       draftSessions.set(draftId, session);
       console.log('Created new draft session:', { draftId, status: 'created' });
@@ -207,17 +256,11 @@ io.on('connection', (socket) => {
       console.log('Updated existing draft session:', { draftId, status: 'updated' });
     }
 
-    // Ensure socket joins the room before sending any updates
     socket.join(draftId);
 
-    // Wait a short moment to ensure join is complete
-    setTimeout(() => {
-      const sessionUpdate = {
-        ...session!,
-        timer: null
-      };
-      io.to(draftId).emit('draftStateUpdate', sessionUpdate);
-    }, 100);
+    // Send clean state
+    const cleanState = { ...session, timer: null };
+    io.to(draftId).emit('draftStateUpdate', cleanState);
   });
 
   socket.on('toggleReady', ({ draftId, team }: { draftId: string; team: Team }) => {
@@ -234,13 +277,11 @@ io.on('connection', (socket) => {
     if (session.blueReady && session.redReady && !session.inProgress) {
       session.inProgress = true;
       startDraftTimer(draftId);
+    } else {
+      // Send clean state if not starting draft
+      const cleanState = { ...session, timer: null };
+      io.to(draftId).emit('draftStateUpdate', cleanState);
     }
-
-    const sessionUpdate = {
-      ...session,
-      timer: null
-    };
-    io.to(draftId).emit('draftStateUpdate', sessionUpdate);
   });
 
   socket.on('setPendingSelection', ({ draftId, champion, team }: { draftId: string; champion: Champion | null; team: Team }) => {
@@ -291,15 +332,10 @@ io.on('connection', (socket) => {
       champion: session.pendingChampion?.name
     });
 
-    // Broadcast the pending selection update to all clients in the draft
+    // Send clean state for both events
+    const cleanState = { ...session, timer: null };
     io.to(draftId).emit('pendingSelectionUpdate', { champion, team });
-
-    // Also send a state update to keep everything in sync
-    const sessionUpdate = {
-      ...session,
-      timer: null
-    };
-    io.to(draftId).emit('draftStateUpdate', sessionUpdate);
+    io.to(draftId).emit('draftStateUpdate', cleanState);
   });
 
   socket.on('selectChampion', ({ draftId, champion, team }: { draftId: string; champion: Champion | null; team: Team }) => {
@@ -346,16 +382,13 @@ io.on('connection', (socket) => {
       session.timer = null;
     }
 
-    // Clear pending selection immediately to prevent visual duplication
+    // Clear pending selection
     session.pendingChampion = null;
     session.pendingTeam = null;
 
-    // Send a single confirmation update with the selection
-    const confirmUpdate = {
-      ...session,
-      timer: null
-    };
-    io.to(draftId).emit('draftStateUpdate', confirmUpdate);
+    // Send clean state for confirmation
+    const cleanState = { ...session, timer: null };
+    io.to(draftId).emit('draftStateUpdate', cleanState);
 
     // Advance phase after a short delay
     setTimeout(() => {
@@ -374,7 +407,8 @@ io.on('connection', (socket) => {
           startDraftTimer(draftId);
         } else {
           session.inProgress = false;
-          io.to(draftId).emit('draftComplete', session);
+          const finalState = { ...session, timer: null };
+          io.to(draftId).emit('draftComplete', finalState);
         }
       } else {
         console.error('Invalid phase transition detected');
@@ -391,13 +425,38 @@ io.on('connection', (socket) => {
         } else {
           session.redConnected = false;
         }
-        const sessionUpdate = {
-          ...session,
-          timer: null
-        };
-        io.to(currentDraftId).emit('draftStateUpdate', sessionUpdate);
+        const cleanState = { ...session, timer: null };
+        io.to(currentDraftId).emit('draftStateUpdate', cleanState);
       }
     }
+  });
+
+  socket.on('reorderTeam', ({ draftId, team, sourceIndex, targetIndex }: { draftId: string; team: Team; sourceIndex: number; targetIndex: number }) => {
+    const session = draftSessions.get(draftId);
+    if (!session) return;
+
+    // Only allow reordering if draft is complete
+    if (session.inProgress || session.currentPhaseIndex < draftSequence.length) return;
+
+    // Get the team's picks
+    const picks = team === 'BLUE' ? session.bluePicks : session.redPicks;
+    
+    // Perform direct swap
+    const temp = picks[sourceIndex];
+    picks[sourceIndex] = picks[targetIndex];
+    picks[targetIndex] = temp;
+
+    // Update the session
+    if (team === 'BLUE') {
+      session.bluePicks = picks;
+    } else {
+      session.redPicks = picks;
+    }
+
+    // Send clean state for both events
+    const cleanState = { ...session, timer: null };
+    io.to(draftId).emit('teamReorder', { team, sourceIndex, targetIndex });
+    io.to(draftId).emit('draftStateUpdate', cleanState);
   });
 });
 
