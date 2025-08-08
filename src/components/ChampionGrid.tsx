@@ -124,12 +124,12 @@ export default function ChampionGrid({
         bg-black/20 rounded-lg border border-gray-800
         transition-all duration-700 ease-in-out
         overflow-hidden w-full
-        ${isDraftComplete ? 'mx-auto max-w-[1200px]' : ''}
+        mx-auto max-w-[1200px]
       `}>
         <div className={`
           overflow-y-auto overflow-x-hidden hide-scrollbar
           transition-all duration-700 ease-in-out
-          ${isDraftComplete ? 'h-[400px]' : 'h-[320px]'}
+          h-[300px]
         `}>
           <div className={`
             grid p-4

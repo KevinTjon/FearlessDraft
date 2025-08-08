@@ -746,13 +746,13 @@ const Draft = () => {
 
   // The actual draft interface
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-lol-dark overflow-hidden">
+    <div className="h-screen grid grid-cols-1 lg:grid-cols-12 bg-lol-dark overflow-hidden">
       {/* Left sidebar - Blue team */}
       <div className={`
         transition-all duration-700 ease-in-out
-        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-2'}
-        bg-blue-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-start
-        min-h-[200px] lg:min-h-screen
+        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-3'}
+        bg-blue-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-end
+        h-full
       `}>
         <TeamComposition 
           team="BLUE"
@@ -779,8 +779,8 @@ const Draft = () => {
       {/* Main content */}
       <div className={`
         transition-all duration-700 ease-in-out
-        ${isDraftComplete ? 'lg:col-span-6' : 'lg:col-span-8'}
-        p-2 sm:p-4 flex flex-col min-h-screen
+        ${isDraftComplete ? 'lg:col-span-6' : 'lg:col-span-6'}
+        p-2 sm:p-4 flex flex-col h-full
       `}>
         <div className="flex-none">
           {(isDraftComplete || isSwapPhase) && (
@@ -857,9 +857,9 @@ const Draft = () => {
       {/* Right sidebar - Red team */}
       <div className={`
         transition-all duration-700 ease-in-out
-        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-2'}
-        bg-red-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-end ml-auto
-        min-h-[200px] lg:min-h-screen
+        ${isDraftComplete ? 'lg:col-span-3' : 'lg:col-span-3'}
+        bg-red-900 bg-opacity-20 p-2 sm:p-4 flex items-center justify-end
+        h-full
       `}>
         <TeamComposition 
           team="RED"

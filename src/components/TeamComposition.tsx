@@ -4,6 +4,7 @@ import { Champion } from "../data/types";
 import { DEFAULT_CHAMPION_ICON } from "../data/staticChampions";
 import { useState, useEffect } from "react";
 import WideSplash from '../Wide.png';
+import { champions } from "../data/champions";
 
 interface TeamCompositionProps {
   slots: DraftSlot[];
@@ -45,6 +46,11 @@ const TeamComposition = ({
   // Add new state for drag preview
   const [dragPreview, setDragPreview] = useState<string | null>(null);
   const [draggedOverIndex, setDraggedOverIndex] = useState<number | null>(null);
+  // Track if pending champion splash art has loaded
+  const [pendingSplashLoaded, setPendingSplashLoaded] = useState<boolean>(false);
+  // Track all preloaded splash arts
+  const [preloadedSplashArts, setPreloadedSplashArts] = useState<Set<string>>(new Set());
+
 
   // Create an array of all slots including empty ones
   const allSlots = positions.map((position, index) => {
@@ -60,6 +66,65 @@ const TeamComposition = ({
 
   // Find the next empty slot index
   const nextEmptySlotIndex = allSlots.findIndex(slot => !slot.champion);
+
+  // Preload all champion splash arts on component mount
+  useEffect(() => {
+    const preloadAllSplashArts = async () => {
+      const loadPromises = champions
+        .filter(champion => (champion as any).numericId) // Only champions with numeric IDs
+        .map(champion => {
+          const splashUrl = `https://cdn.communitydragon.org/latest/champion/${(champion as any).numericId}/splash-art/centered/skin/0`;
+          
+          return new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              setPreloadedSplashArts(prev => new Set([...prev, splashUrl]));
+              resolve();
+            };
+            img.onerror = () => {
+              // Still resolve even on error to not block other images
+              resolve();
+            };
+            img.src = splashUrl;
+          });
+        });
+
+      // Load images in batches to avoid overwhelming the browser
+      const batchSize = 10;
+      for (let i = 0; i < loadPromises.length; i += batchSize) {
+        const batch = loadPromises.slice(i, i + batchSize);
+        await Promise.all(batch);
+        // Small delay between batches to be nice to the CDN
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    };
+
+    preloadAllSplashArts();
+  }, []); // Only run once on mount
+
+  // Check if pending champion splash art is already preloaded
+  useEffect(() => {
+    if (pendingChampion && (pendingChampion as any).numericId) {
+      const splashUrl = `https://cdn.communitydragon.org/latest/champion/${(pendingChampion as any).numericId}/splash-art/centered/skin/0`;
+      
+      // If already preloaded, show immediately
+      if (preloadedSplashArts.has(splashUrl)) {
+        setPendingSplashLoaded(true);
+      } else {
+        // If not preloaded yet, wait for it to load
+        setPendingSplashLoaded(false);
+        const img = new Image();
+        img.onload = () => {
+          setPendingSplashLoaded(true);
+        };
+        img.src = splashUrl;
+      }
+    } else {
+      setPendingSplashLoaded(false);
+    }
+  }, [pendingChampion, preloadedSplashArts]);
+
+
 
   // Modify the drag handlers to check for swap phase
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
@@ -192,7 +257,9 @@ const TeamComposition = ({
 
   const getChampionImage = (slot: DraftSlot, index: number, isPendingSlot: boolean) => {
     if (isPendingSlot && pendingChampion) {
-      return pendingChampion.image;
+      const splashUrl = `https://cdn.communitydragon.org/latest/champion/${(pendingChampion as any).numericId}/splash-art/centered/skin/0`;
+      // Always use splash art for pending champion to match picked champions
+      return splashUrl;
     }
     if (slot.champion) {
       // If not picked yet, use regular icon
@@ -213,18 +280,18 @@ const TeamComposition = ({
   
   return (
     <div className={`
-      ${teamClass} bg-opacity-20 px-2 sm:px-4 py-2 sm:py-4 rounded-lg 
+      ${teamClass} bg-opacity-20 px-2 sm:px-3 py-1 sm:py-2 rounded-lg 
       h-full w-full flex flex-col justify-center
       transition-all duration-700 ease-in-out
-      max-w-[320px] sm:max-w-[400px] md:max-w-[480px] lg:max-w-[560px]
-      min-w-[240px]
-      ${team === "RED" ? "ml-auto" : ""}
+      max-w-[400px] sm:max-w-[480px] md:max-w-[560px] lg:max-w-[640px]
+      min-w-[300px]
+
       bg-black/20 border border-gray-800
       ${team === "BLUE" ? "team-blue-glow shadow-lg shadow-blue-500/50" : ""}
       ${team === "RED" ? "team-red-glow shadow-lg shadow-red-500/50" : ""}
       scale-105
     `}>
-      <h3 className={`text-lg sm:text-xl md:text-2xl font-bold ${teamTextClass} text-center mb-2 sm:mb-4`}>
+      <h3 className={`text-base sm:text-lg md:text-xl font-bold ${teamTextClass} text-center mb-1 sm:mb-2`}>
         {teamName}
         {isSwapPhase && canSwap && (
           <div className="text-xs sm:text-sm font-normal text-lol-gold mt-1">
@@ -237,10 +304,10 @@ const TeamComposition = ({
           </div>
         )}
       </h3>
-      <div className={`border-b-2 ${teamBorderClass} border-opacity-50 mb-4 sm:mb-6`}></div>
-      <div className="flex flex-col gap-2 sm:gap-4 w-full">
+      <div className={`border-b-2 ${teamBorderClass} border-opacity-50 mb-1 sm:mb-2`}></div>
+      <div className="flex flex-col gap-1 sm:gap-2 w-full">
         {allSlots.map((slot, index) => {
-          const isPendingSlot = index === nextEmptySlotIndex && pendingChampion && isPickPhase;
+          const isPendingSlot = index === nextEmptySlotIndex && pendingChampion && isPickPhase && pendingSplashLoaded;
           const isPickedChampion = slot.champion && pickedChampions[index];
           const hasTransitioned = imageTransitioned[index];
           const isDraftCompleteTransition = (isDraftComplete || isSwapPhase) && hasTransitioned;
@@ -262,7 +329,7 @@ const TeamComposition = ({
                 transition-all duration-700 ease-in-out
                 ${isBeingDragged ? 'opacity-50 scale-95' : 'opacity-100'}
                 ${isDraggedOver ? 'scale-105' : 'scale-100'}
-                hover:scale-105
+
               `}
             >
               <div 
@@ -298,25 +365,12 @@ const TeamComposition = ({
                       className={`
                         transition-all duration-300 ease-in-out
                         ${isPendingSlot ? 'opacity-90' : ''}
-                        scale-105 hover:scale-110
+                        scale-100
                         ${isBeingDragged ? 'scale-95' : ''}
                       `}
                       crossOrigin="anonymous"
                     />
-                    {isPendingSlot && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-80 py-1 sm:py-2">
-                        <div className="text-sm sm:text-base font-medium text-center text-white">
-                          {pendingChampion!.name}
-                        </div>
-                      </div>
-                    )}
-                    {isPickedChampion && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 py-0.5 sm:py-1">
-                        <div className="text-xs sm:text-sm text-center text-white">
-                          {slot.champion!.name}
-                        </div>
-                      </div>
-                    )}
+
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full">
