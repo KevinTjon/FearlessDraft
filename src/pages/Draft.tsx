@@ -40,12 +40,30 @@ interface DraftState {
 const Draft = () => {
   const { draftId } = useParams();
   const [searchParams] = useSearchParams();
-  const team = searchParams.get("team")?.toUpperCase() as Team | null;
+  const teamFromUrl = searchParams.get("team");
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Function to determine if team name corresponds to blue or red team
+  const determineTeamSide = (teamName: string, blueTeamName: string, redTeamName: string): Team | null => {
+    if (!teamName) return null;
+    
+    // Handle legacy URLs
+    if (teamName.toUpperCase() === 'BLUE') return 'BLUE';
+    if (teamName.toUpperCase() === 'RED') return 'RED';
+    if (teamName.toUpperCase() === 'SPECTATOR') return 'SPECTATOR';
+    if (teamName.toUpperCase() === 'BROADCAST') return 'BROADCAST';
+    
+    // Match against actual team names
+    if (teamName === blueTeamName) return 'BLUE';
+    if (teamName === redTeamName) return 'RED';
+    
+    return null;
+  };
+
   // Draft state
   const [draftState, setDraftState] = useState<DraftState | null>(null);
+  const [team, setTeam] = useState<Team | null>(null);
   const [isDraftComplete, setIsDraftComplete] = useState(false);
   const [isSwapPhase, setIsSwapPhase] = useState(false);
   const [swapTimeLeft, setSwapTimeLeft] = useState(60);
@@ -59,7 +77,7 @@ const Draft = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!draftId || !team) {
+    if (!draftId || !teamFromUrl) {
       console.log("No draftId or team provided");
       // Only redirect if the draft isn't complete
       if (!isDraftComplete) {
@@ -67,8 +85,6 @@ const Draft = () => {
       }
       return;
     }
-
-    console.log("Initializing draft with:", { draftId, team });
 
     // Get saved draft data from sessionStorage
     const savedDraftData = sessionStorage.getItem(`draft_${draftId}`);
@@ -86,7 +102,25 @@ const Draft = () => {
       } catch (e) {
         console.error("Error parsing draft data:", e);
       }
+    } else {
+      // If no saved data, assume the URL team name is one of the actual team names
+      // We'll let the server handle the full resolution, but provide a hint
+      console.log("No saved data, using URL team as potential team name:", teamFromUrl);
     }
+
+    // Determine which team this URL represents
+    const resolvedTeam = determineTeamSide(teamFromUrl, blueTeamName, redTeamName);
+    
+    if (!resolvedTeam) {
+      console.log("Could not determine team from URL, will try to resolve from server:", teamFromUrl);
+      // Don't redirect immediately - let the server help us resolve the team
+      // We'll store the team name and resolve it when we get server data
+      setTeam(null);
+    } else {
+      setTeam(resolvedTeam);
+    }
+
+    console.log("Initializing draft with:", { draftId, teamFromUrl, resolvedTeam });
 
     try {
       // Connect to WebSocket and create/join draft
@@ -98,8 +132,16 @@ const Draft = () => {
       
       // Small delay to ensure draft is created before joining
       setTimeout(() => {
-        console.log("Joining draft...");
-        socketService.joinDraft(draftId, team);
+        if (resolvedTeam) {
+          console.log("Joining draft with resolved team:", resolvedTeam);
+          socketService.joinDraft(draftId, resolvedTeam);
+        } else {
+          console.log("Team not resolved yet, sending team name to server for resolution:", teamFromUrl);
+          // Send the team name from URL - server will resolve it
+          if (teamFromUrl) {
+            socketService.joinDraft(draftId, teamFromUrl as Team);
+          }
+        }
       }, 100);
 
       // Listen for socket connection errors
@@ -159,13 +201,33 @@ const Draft = () => {
         lastHandledPhase.current = newState.currentPhaseIndex - 1;
       }
 
-      latestDraftState.current = newState;
-      setDraftState(newState);
+      // Preserve team names from sessionStorage if server doesn't have them
+      const preservedState = {
+        ...newState,
+        blueTeamName: newState.blueTeamName || blueTeamName,
+        redTeamName: newState.redTeamName || redTeamName
+      };
+
+      // If we haven't resolved the team yet, try to resolve it now with server data
+      if (!team && teamFromUrl) {
+        const resolvedTeamFromServer = determineTeamSide(teamFromUrl, preservedState.blueTeamName, preservedState.redTeamName);
+        if (resolvedTeamFromServer) {
+          console.log("Resolved team from server data:", resolvedTeamFromServer);
+          setTeam(resolvedTeamFromServer);
+          // Join the draft now that we know which team we are
+          socketService.joinDraft(draftId!, resolvedTeamFromServer);
+        }
+      }
+
+      latestDraftState.current = preservedState;
+      setDraftState(preservedState);
 
       console.log("Updated draft state from server:", {
-         pendingChampion: newState.pendingChampion?.name,
-         pendingTeam: newState.pendingTeam,
-         phase: newState.currentPhaseIndex,
+         pendingChampion: preservedState.pendingChampion?.name,
+         pendingTeam: preservedState.pendingTeam,
+         phase: preservedState.currentPhaseIndex,
+         blueTeamName: preservedState.blueTeamName,
+         redTeamName: preservedState.redTeamName,
          pendingTimeUpFlagAfterUpdate: pendingTimeUp.current
       });
     });
@@ -173,10 +235,18 @@ const Draft = () => {
     // Listen for draft completion
     socketService.onDraftComplete((finalState) => {
       console.log("Draft complete - setting final state");
-      setDraftState(finalState);
+      
+      // Preserve team names from sessionStorage if server doesn't have them
+      const preservedFinalState = {
+        ...finalState,
+        blueTeamName: finalState.blueTeamName || blueTeamName,
+        redTeamName: finalState.redTeamName || redTeamName
+      };
+      
+      setDraftState(preservedFinalState);
       setIsDraftComplete(true);
       pendingTimeUp.current = false;
-      latestDraftState.current = finalState;
+      latestDraftState.current = preservedFinalState;
       
       // Disconnect socket after draft completion
       socketService.disconnect();
@@ -244,7 +314,7 @@ const Draft = () => {
       console.log("%%%% Draft Component Unmounting - Disconnecting Socket %%%%");
       socketService.disconnect();
     };
-  }, [draftId, team, navigate, toast, isDraftComplete]);
+  }, [draftId, teamFromUrl, navigate, toast, isDraftComplete]);
 
   useEffect(() => {
     if (!draftState) return;

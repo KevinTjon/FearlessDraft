@@ -143,14 +143,14 @@ const Setup = () => {
                   </div>
                   <div className="relative">
                     <code className="text-xs text-blue-200/70 break-all block p-2 pr-10 rounded bg-blue-950/30">
-                      {draftId ? `${window.location.origin}/draft/${draftId}?team=blue` : 'Link will appear here...'}
+                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}` : 'Link will appear here...'}
                     </code>
                     {draftId && (
                       <button
-                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=blue`)}
+                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}`)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-900/30 rounded transition-colors"
                       >
-                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=blue` ? (
+                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}` ? (
                           <Check className="h-4 w-4 text-green-400" />
                         ) : (
                           <Copy className="h-4 w-4 text-blue-400" />
@@ -168,14 +168,14 @@ const Setup = () => {
                   </div>
                   <div className="relative">
                     <code className="text-xs text-red-200/70 break-all block p-2 pr-10 rounded bg-red-950/30">
-                      {draftId ? `${window.location.origin}/draft/${draftId}?team=red` : 'Link will appear here...'}
+                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}` : 'Link will appear here...'}
                     </code>
                     {draftId && (
                       <button
-                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=red`)}
+                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}`)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-red-900/30 rounded transition-colors"
                       >
-                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=red` ? (
+                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}` ? (
                           <Check className="h-4 w-4 text-green-400" />
                         ) : (
                           <Copy className="h-4 w-4 text-red-400" />
@@ -211,27 +211,15 @@ const Setup = () => {
                 </div>
 
                 {/* Broadcast Link */}
-                <div className="p-3 rounded-lg bg-green-950/20 border border-green-500/30">
+                <div className="p-3 rounded-lg bg-green-950/20 border border-green-500/30 opacity-60">
                   <div className="flex items-center gap-2 mb-2">
                     <Radio className="h-4 w-4 text-green-400" />
                     <span className="text-sm font-medium text-green-200">Broadcast View</span>
                   </div>
                   <div className="relative">
-                    <code className="text-xs text-green-200/70 break-all block p-2 pr-10 rounded bg-green-950/30">
-                      {draftId ? `${window.location.origin}/draft/${draftId}?team=broadcast` : 'Link will appear here...'}
-                    </code>
-                    {draftId && (
-                      <button
-                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=broadcast`)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-green-900/30 rounded transition-colors"
-                      >
-                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=broadcast` ? (
-                          <Check className="h-4 w-4 text-green-400" />
-                        ) : (
-                          <Copy className="h-4 w-4 text-green-400" />
-                        )}
-                      </button>
-                    )}
+                    <div className="text-xs text-green-200/70 block p-2 rounded bg-green-950/30 text-center">
+                      Coming Soon
+                    </div>
                   </div>
                 </div>
               </div>

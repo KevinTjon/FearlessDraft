@@ -8,9 +8,16 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup": "node scripts/setup.js",
+    "dev:full": "node scripts/dev.js",
+    "dev:server": "cd server && npm run dev",
+    "build:all": "npm run build:shared && npm run build:server && npm run build",
+    "build:shared": "cd shared && npm run build",
+    "build:server": "cd server && npm run build"
   },
   "dependencies": {
+    "@champ-draft-arena/shared": "file:./shared",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -63,7 +70,8 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
