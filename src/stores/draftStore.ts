@@ -58,6 +58,11 @@ const initialState: Omit<DraftStore, 'setDraftState' | 'setLoading' | 'setError'
   swapTimeLeft: 60,
   canSwap: true,
   
+  // Timer synchronization fields
+  phaseStartTime: null,
+  phaseTimeLeft: null,
+  phaseTimerActive: false,
+  
   // UI state
   isLoading: true,
   error: null,
@@ -178,6 +183,10 @@ export const selectDraftState = (state: DraftStore) => ({
   isSwapPhase: state.isSwapPhase,
   swapTimeLeft: state.swapTimeLeft,
   canSwap: state.canSwap,
+  // Timer synchronization fields
+  phaseStartTime: state.phaseStartTime,
+  phaseTimeLeft: state.phaseTimeLeft,
+  phaseTimerActive: state.phaseTimerActive,
 });
 
 export const selectUIState = (state: DraftStore) => ({

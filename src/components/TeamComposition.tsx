@@ -48,10 +48,6 @@ const TeamComposition = ({
   const [draggedOverIndex, setDraggedOverIndex] = useState<number | null>(null);
   // Track if pending champion splash art has loaded
   const [pendingSplashLoaded, setPendingSplashLoaded] = useState<boolean>(false);
-  // Track all preloaded splash arts
-  const [preloadedSplashArts, setPreloadedSplashArts] = useState<Set<string>>(new Set());
-
-
   // Create an array of all slots including empty ones
   const allSlots = positions.map((position, index) => {
     const existingSlot = slots.find((slot, slotIndex) => slotIndex === index);
@@ -67,62 +63,24 @@ const TeamComposition = ({
   // Find the next empty slot index
   const nextEmptySlotIndex = allSlots.findIndex(slot => !slot.champion);
 
-  // Preload all champion splash arts on component mount
+  // Note: Champion splash arts are now preloaded globally at app startup
+  // No need for component-level preloading anymore
+
+  // Optimized pending champion splash art loading with debouncing
   useEffect(() => {
-    const preloadAllSplashArts = async () => {
-      const loadPromises = champions
-        .filter(champion => (champion as any).numericId) // Only champions with numeric IDs
-        .map(champion => {
-          const splashUrl = `https://cdn.communitydragon.org/latest/champion/${(champion as any).numericId}/splash-art/centered/skin/0`;
-          
-          return new Promise<void>((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              setPreloadedSplashArts(prev => new Set([...prev, splashUrl]));
-              resolve();
-            };
-            img.onerror = () => {
-              // Still resolve even on error to not block other images
-              resolve();
-            };
-            img.src = splashUrl;
-          });
-        });
-
-      // Load images in batches to avoid overwhelming the browser
-      const batchSize = 10;
-      for (let i = 0; i < loadPromises.length; i += batchSize) {
-        const batch = loadPromises.slice(i, i + batchSize);
-        await Promise.all(batch);
-        // Small delay between batches to be nice to the CDN
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    };
-
-    preloadAllSplashArts();
-  }, []); // Only run once on mount
-
-  // Check if pending champion splash art is already preloaded
-  useEffect(() => {
-    if (pendingChampion && (pendingChampion as any).numericId) {
-      const splashUrl = `https://cdn.communitydragon.org/latest/champion/${(pendingChampion as any).numericId}/splash-art/centered/skin/0`;
-      
-      // If already preloaded, show immediately
-      if (preloadedSplashArts.has(splashUrl)) {
+    // Debounce rapid pending champion changes to prevent unnecessary image loading
+    const timeoutId = setTimeout(() => {
+      if (pendingChampion && (pendingChampion as any).numericId) {
+        // Since all splash arts are preloaded at app startup, we can set as loaded immediately
+        // This avoids unnecessary image loading checks for rapid champion switching
         setPendingSplashLoaded(true);
       } else {
-        // If not preloaded yet, wait for it to load
         setPendingSplashLoaded(false);
-        const img = new Image();
-        img.onload = () => {
-          setPendingSplashLoaded(true);
-        };
-        img.src = splashUrl;
       }
-    } else {
-      setPendingSplashLoaded(false);
-    }
-  }, [pendingChampion, preloadedSplashArts]);
+    }, 50); // 50ms debounce for rapid switching
+
+    return () => clearTimeout(timeoutId);
+  }, [pendingChampion]);
 
 
 

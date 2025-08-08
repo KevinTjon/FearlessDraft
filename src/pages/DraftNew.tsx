@@ -249,7 +249,7 @@ const DraftNew = () => {
                   <div className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-900/20 text-blue-300">
                     <p className="font-medium">
                       {!draftState.blueConnected || !draftState.redConnected ? (
-                        "Waiting for both captains to connect..."
+                        `Waiting for both captains to connect... (Blue: ${draftState.blueConnected}, Red: ${draftState.redConnected})`
                       ) : !draftState.blueReady && !draftState.redReady ? (
                         "Waiting for both teams to ready up"
                       ) : !draftState.blueReady ? (
@@ -270,21 +270,7 @@ const DraftNew = () => {
               )}
             </div>
 
-            {/* Draft Progress */}
-            <div className="text-center">
-              <div className="inline-block px-6 py-4 rounded-lg bg-black/40 border border-lol-gold/10">
-                <h3 className="text-lol-gold font-medium mb-2">Draft Progress</h3>
-                <div className="w-64 bg-gray-700 rounded-full h-2 mb-2">
-                  <div 
-                    className="bg-lol-gold h-2 rounded-full transition-all duration-300" 
-                    style={{ width: `${draftProgress.percentage}%` }}
-                  />
-                </div>
-                <p className="text-sm text-lol-text/70">
-                  {draftProgress.current} / {draftProgress.total} phases complete
-                </p>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>
@@ -352,6 +338,9 @@ const DraftNew = () => {
                   onTimeUp={() => "timeout"} // Server handles timeouts now
                   durationSeconds={30}
                   currentPhase={draftState.currentPhaseIndex}
+                  phaseStartTime={draftState.phaseStartTime}
+                  phaseTimeLeft={draftState.phaseTimeLeft}
+                  phaseTimerActive={draftState.phaseTimerActive}
                 />
               </div>
             )}

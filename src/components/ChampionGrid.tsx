@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import { Champion } from "../data/types";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, X } from "lucide-react";
@@ -28,7 +28,7 @@ const roleIcons = {
   SUPPORT: "/role-icons/Position_Gold-Support.png"
 };
 
-export default function ChampionGrid({
+const ChampionGrid = memo(function ChampionGrid({
   champions,
   onChampionSelect,
   selectedChampions,
@@ -56,21 +56,36 @@ export default function ChampionGrid({
     );
   }
   
-  const filteredChampions = champions.filter(champion => {
-    const matchesSearch = champion.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPosition = positionFilter ? champion.roles.includes(positionFilter.toLowerCase()) : true;
-    
-    return matchesSearch && matchesPosition;
-  });
+  // Memoize filtered champions to prevent unnecessary recalculations
+  const filteredChampions = useMemo(() => {
+    return champions.filter(champion => {
+      const matchesSearch = champion.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesPosition = positionFilter ? champion.roles.includes(positionFilter.toLowerCase()) : true;
+      
+      return matchesSearch && matchesPosition;
+    });
+  }, [champions, searchTerm, positionFilter]);
 
-  const handleChampionClick = (champion: Champion) => {
+  // Memoize selected/banned champion IDs for faster lookups
+  const selectedChampionIds = useMemo(() => 
+    new Set(selectedChampions.map(c => c.id)), 
+    [selectedChampions]
+  );
+
+  const bannedChampionIds = useMemo(() => 
+    new Set(bannedChampions.map(c => c.id)), 
+    [bannedChampions]
+  );
+
+  // Memoize click handler to prevent unnecessary re-renders
+  const handleChampionClick = useCallback((champion: Champion) => {
     if (!isMyTurn) return;
-    if (selectedChampions.some(c => c.id === champion.id)) return;
-    if (bannedChampions.some(c => c.id === champion.id)) return;
+    if (selectedChampionIds.has(champion.id)) return;
+    if (bannedChampionIds.has(champion.id)) return;
     
     // Use pending selection for both pick and ban phases
     onPendingSelect(champion);
-  };
+  }, [isMyTurn, selectedChampionIds, bannedChampionIds, onPendingSelect]);
 
   const handleConfirm = () => {
     if (!isMyTurn) return;
@@ -138,8 +153,8 @@ export default function ChampionGrid({
             w-full
           `}>
             {filteredChampions.map((champion) => {
-              const isSelected = selectedChampions.some(c => c.id === champion.id);
-              const isBanned = bannedChampions.some(c => c.id === champion.id);
+              const isSelected = selectedChampionIds.has(champion.id);
+              const isBanned = bannedChampionIds.has(champion.id);
               const isPending = pendingChampion?.id === champion.id;
               const isDisabled = isSelected || isBanned;
               
@@ -188,7 +203,9 @@ export default function ChampionGrid({
       )}
     </div>
   );
-}
+});
+
+export default ChampionGrid;
 
 // Update the styles constant to include scrollbar hiding
 const styles = `

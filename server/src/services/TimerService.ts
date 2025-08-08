@@ -6,11 +6,14 @@ export interface TimerEvents {
   phaseExpired: (draftId: string, phaseIndex: number) => void;
   swapPhaseUpdate: (draftId: string, timeLeft: number, canSwap: boolean) => void;
   swapPhaseComplete: (draftId: string) => void;
+  timerStarted: (draftId: string, startTime: number, duration: number) => void;
+  timerCleared: (draftId: string) => void;
 }
 
 export class TimerService extends EventEmitter {
   private phaseTimers = new Map<string, NodeJS.Timeout>();
   private swapTimers = new Map<string, NodeJS.Timeout>();
+  private phaseStartTimes = new Map<string, number>(); // Track when phase timers started
 
   /**
    * Start a phase timer for a draft
@@ -21,12 +24,18 @@ export class TimerService extends EventEmitter {
 
     console.log(`Starting phase timer for draft ${draftId}, phase ${phaseIndex}`);
 
+    const startTime = Date.now();
+    this.phaseStartTimes.set(draftId, startTime);
+
     const timer = setTimeout(() => {
       this.clearPhaseTimer(draftId);
       this.emit('phaseExpired', draftId, phaseIndex);
     }, DRAFT_CONFIG.PHASE_TIMER_DURATION);
 
     this.phaseTimers.set(draftId, timer);
+
+    // Emit timer started event with synchronization data
+    this.emit('timerStarted', draftId, startTime, DRAFT_CONFIG.PHASE_TIMER_DURATION / 1000);
   }
 
   /**
@@ -37,7 +46,11 @@ export class TimerService extends EventEmitter {
     if (timer) {
       clearTimeout(timer);
       this.phaseTimers.delete(draftId);
+      this.phaseStartTimes.delete(draftId);
       console.log(`Cleared phase timer for draft ${draftId}`);
+      
+      // Emit timer cleared event
+      this.emit('timerCleared', draftId);
     }
   }
 
@@ -108,6 +121,31 @@ export class TimerService extends EventEmitter {
     return {
       phase: this.phaseTimers.size,
       swap: this.swapTimers.size
+    };
+  }
+
+  /**
+   * Get current timer state for synchronization
+   */
+  getTimerState(draftId: string): { phaseStartTime: number | null; phaseTimeLeft: number | null; phaseTimerActive: boolean } {
+    const startTime = this.phaseStartTimes.get(draftId);
+    const hasActiveTimer = this.phaseTimers.has(draftId);
+    
+    if (!startTime || !hasActiveTimer) {
+      return {
+        phaseStartTime: null,
+        phaseTimeLeft: null,
+        phaseTimerActive: false
+      };
+    }
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const timeLeft = Math.max(0, (DRAFT_CONFIG.PHASE_TIMER_DURATION / 1000) - elapsed);
+
+    return {
+      phaseStartTime: startTime,
+      phaseTimeLeft: Math.ceil(timeLeft),
+      phaseTimerActive: true
     };
   }
 

@@ -13,15 +13,36 @@ export class SessionManager {
    * Create a new draft session
    */
   createSession(draftId: string, blueTeamName: string, redTeamName: string): DraftSession {
+    console.log(`🏗️ createSession: Creating/updating session ${draftId}`, { blueTeamName, redTeamName });
+    
     // Validate input parameters
     validateDraftCreation(draftId, blueTeamName, redTeamName);
 
     // Check if session already exists
     const existingSession = this.sessions.get(draftId);
     if (existingSession) {
-      // Update team names for existing session
-      existingSession.blueTeamName = blueTeamName.trim();
-      existingSession.redTeamName = redTeamName.trim();
+      console.log(`📝 createSession: Session exists, current teams:`, {
+        currentBlue: existingSession.blueTeamName,
+        currentRed: existingSession.redTeamName,
+        newBlue: blueTeamName,
+        newRed: redTeamName
+      });
+      
+      // Smart team name updating: only update if we have better names than defaults
+      const hasDefaultBlue = existingSession.blueTeamName === 'Blue Team';
+      const hasDefaultRed = existingSession.redTeamName === 'Red Team';
+      const newBlueIsNotDefault = blueTeamName.trim() !== 'Blue Team';
+      const newRedIsNotDefault = redTeamName.trim() !== 'Red Team';
+      
+      if (hasDefaultBlue && newBlueIsNotDefault) {
+        existingSession.blueTeamName = blueTeamName.trim();
+        console.log(`✅ createSession: Updated BLUE team name to "${blueTeamName.trim()}"`);
+      }
+      if (hasDefaultRed && newRedIsNotDefault) {
+        existingSession.redTeamName = redTeamName.trim();
+        console.log(`✅ createSession: Updated RED team name to "${redTeamName.trim()}"`);
+      }
+      
       return existingSession;
     }
 
@@ -45,7 +66,12 @@ export class SessionManager {
       pendingTeam: null,
       isSwapPhase: false,
       swapTimeLeft: DRAFT_CONFIG.SWAP_PHASE_DURATION,
-      canSwap: true
+      canSwap: true,
+      
+      // Initialize timer fields
+      phaseStartTime: null,
+      phaseTimeLeft: null,
+      phaseTimerActive: false
     };
 
     this.sessions.set(draftId, session);
@@ -120,6 +146,110 @@ export class SessionManager {
     });
 
     return session;
+  }
+
+  /**
+   * Assign a custom team name to the appropriate team slot when a captain joins
+   * Uses a more balanced approach - alternates between blue and red based on session ID hash
+   */
+  assignTeamName(draftId: string, customTeamName: string): 'BLUE' | 'RED' | null {
+    const session = this.sessions.get(draftId);
+    if (!session) {
+      console.log(`❌ assignTeamName: Session not found for ${draftId}`);
+      throw new Error('Session not found');
+    }
+
+    const trimmedName = customTeamName.trim();
+    console.log(`🔍 assignTeamName: Trying to assign "${trimmedName}" in session ${draftId}`, {
+      currentBlue: session.blueTeamName,
+      currentRed: session.redTeamName,
+      blueConnected: session.blueConnected,
+      redConnected: session.redConnected
+    });
+    
+    // If the name already matches an existing team, return that team
+    if (trimmedName === session.blueTeamName) {
+      console.log(`✅ assignTeamName: "${trimmedName}" matches existing BLUE team`);
+      return 'BLUE';
+    }
+    if (trimmedName === session.redTeamName) {
+      console.log(`✅ assignTeamName: "${trimmedName}" matches existing RED team`);
+      return 'RED';
+    }
+    
+    // Check which slots are available
+    const blueAvailable = session.blueTeamName === 'Blue Team' && !session.blueConnected;
+    const redAvailable = session.redTeamName === 'Red Team' && !session.redConnected;
+    
+    console.log(`🎯 assignTeamName: Slot availability`, { blueAvailable, redAvailable });
+    
+    // If only one slot available, use it
+    if (blueAvailable && !redAvailable) {
+      session.blueTeamName = trimmedName;
+      console.log(`✅ assignTeamName: Assigned "${trimmedName}" to BLUE team in session ${draftId}`);
+      return 'BLUE';
+    }
+    
+    if (redAvailable && !blueAvailable) {
+      session.redTeamName = trimmedName;
+      console.log(`✅ assignTeamName: Assigned "${trimmedName}" to RED team in session ${draftId}`);
+      return 'RED';
+    }
+    
+    // If both slots available, use a deterministic but balanced approach
+    // Hash the draft ID to determine which team gets priority
+    if (blueAvailable && redAvailable) {
+      const hash = draftId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const preferBlue = hash % 2 === 0;
+      
+      console.log(`🎲 assignTeamName: Both slots available, using hash-based assignment (preferBlue: ${preferBlue})`);
+      
+      if (preferBlue) {
+        session.blueTeamName = trimmedName;
+        console.log(`✅ assignTeamName: Assigned "${trimmedName}" to BLUE team in session ${draftId} (hash-based)`);
+        return 'BLUE';
+      } else {
+        session.redTeamName = trimmedName;
+        console.log(`✅ assignTeamName: Assigned "${trimmedName}" to RED team in session ${draftId} (hash-based)`);
+        return 'RED';
+      }
+    }
+    
+    // If both teams have custom names, we can't assign this name
+    console.log(`❌ assignTeamName: Could not assign "${trimmedName}" - both teams already have custom names`);
+    return null;
+  }
+
+  /**
+   * Update timer state for a session
+   */
+  updateTimerState(draftId: string, phaseStartTime: number | null, phaseTimeLeft: number | null, phaseTimerActive: boolean): DraftSession | null {
+    const session = this.sessions.get(draftId);
+    if (!session) {
+      return null;
+    }
+
+    session.phaseStartTime = phaseStartTime;
+    session.phaseTimeLeft = phaseTimeLeft;
+    session.phaseTimerActive = phaseTimerActive;
+
+    return session;
+  }
+
+  /**
+   * Get current timer state for a session
+   */
+  getTimerState(draftId: string): { phaseStartTime: number | null; phaseTimeLeft: number | null; phaseTimerActive: boolean } | null {
+    const session = this.sessions.get(draftId);
+    if (!session) {
+      return null;
+    }
+
+    return {
+      phaseStartTime: session.phaseStartTime,
+      phaseTimeLeft: session.phaseTimeLeft,
+      phaseTimerActive: session.phaseTimerActive
+    };
   }
 
   /**

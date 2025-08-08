@@ -31,7 +31,7 @@ const BanPhase = ({
     <div className="grid grid-cols-2 gap-4">
       {/* Blue Team Bans */}
       <div className="space-y-2">
-        <h3 className="text-sm font-medium text-blue-400 mb-2">{blueTeamName} Bans</h3>
+        <h3 className="text-sm font-medium text-blue-400 mb-2">Blue Bans</h3>
         <div className="grid grid-cols-5 gap-2 max-w-[300px]">
           {Array.from({ length: 5 }).map((_, index) => {
             const champion = blueTeamBans[index];
@@ -69,7 +69,7 @@ const BanPhase = ({
 
       {/* Red Team Bans */}
       <div className="space-y-2 flex flex-col items-end">
-        <h3 className="text-sm font-medium text-red-400 mb-2">{redTeamName} Bans</h3>
+        <h3 className="text-sm font-medium text-red-400 mb-2">Red Bans</h3>
         <div className="grid grid-cols-5 gap-2 max-w-[300px]">
           {Array.from({ length: 5 }).map((_, index) => {
             const champion = redTeamBans[index];

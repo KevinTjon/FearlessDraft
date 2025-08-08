@@ -84,6 +84,11 @@ export interface DraftSession {
   isSwapPhase: boolean;
   swapTimeLeft: number;
   canSwap: boolean;
+  
+  // Timer synchronization fields
+  phaseStartTime: number | null; // Timestamp when current phase timer started
+  phaseTimeLeft: number | null;  // Seconds left in current phase (null if no active timer)
+  phaseTimerActive: boolean;     // Whether phase timer is currently running
 }
 
 // Socket event schemas for type safety

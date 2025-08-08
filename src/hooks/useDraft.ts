@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { useDraftStore, selectDraftState, selectUIState } from '../stores/draftStore';
 import { socketService } from '../services/socketService';
+import { throttleWithImmediate } from '../utils/throttle';
 import { 
   Champion, 
   Team, 
@@ -72,6 +73,19 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
         } catch (e) {
           console.error('Error parsing saved draft data:', e);
         }
+      } else {
+        // If no saved data, check URL parameters for team assignments
+        const urlParams = new URLSearchParams(window.location.search);
+        const blueFromUrl = urlParams.get('blue');
+        const redFromUrl = urlParams.get('red');
+        
+        if (blueFromUrl && redFromUrl) {
+          blueTeamName = decodeURIComponent(blueFromUrl);
+          redTeamName = decodeURIComponent(redFromUrl);
+          console.log('Using team names from URL parameters:', { blueTeamName, redTeamName });
+        } else {
+          console.log('No saved team data or URL parameters, server will handle team assignment dynamically');
+        }
       }
 
       // Resolve team from URL
@@ -86,18 +100,31 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
 
       // Connect to socket
       const socket = socketService.connect();
+      console.log('🔌 Socket connection initiated:', { connected: socketService.isConnected() });
       
-      // Create/join draft
-      socketService.createDraft(draftId, blueTeamName, redTeamName);
-      
-      // Small delay to ensure draft is created before joining
-      setTimeout(() => {
-        if (resolvedTeam) {
-          socketService.joinDraft(draftId, resolvedTeam);
+      // Wait for socket to connect before proceeding
+      const waitForConnection = () => {
+        if (socketService.isConnected()) {
+          console.log('🎯 Socket connected, proceeding with draft operations');
+          
+          // Create/join draft
+          socketService.createDraft(draftId, blueTeamName, redTeamName);
+          
+          // Small delay to ensure draft is created before joining
+          setTimeout(() => {
+            if (resolvedTeam) {
+              socketService.joinDraft(draftId, resolvedTeam);
+            } else {
+              socketService.joinDraft(draftId, teamFromUrl);
+            }
+          }, 100);
         } else {
-          socketService.joinDraft(draftId, teamFromUrl);
+          console.log('⏳ Waiting for socket connection...');
+          setTimeout(waitForConnection, 50);
         }
-      }, 100);
+      };
+      
+      waitForConnection();
 
       isInitializedRef.current = true;
       setConnectionStatus('connected');
@@ -119,7 +146,14 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
 
     // Draft state updates
     const handleDraftStateUpdate = (newState: any) => {
-      console.log('Received draft state update:', newState);
+      console.log('🔄 Client received draft state update:', {
+        blueTeamName: newState.blueTeamName,
+        redTeamName: newState.redTeamName,
+        blueConnected: newState.blueConnected,
+        redConnected: newState.redConnected,
+        blueReady: newState.blueReady,
+        redReady: newState.redReady
+      });
       
       // Resolve team if not yet resolved
       if (!currentTeamRef.current && teamFromUrl) {
@@ -173,16 +207,18 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       });
     };
 
-    // Setup listeners
-    socketService.onDraftStateUpdate(handleDraftStateUpdate);
-    socketService.onDraftComplete(handleDraftComplete);
-    socketService.onPendingSelectionUpdate(handlePendingSelectionUpdate);
-    socketService.onTeamReorder(handleTeamReorder);
-    socketService.onTimerExpired(handleTimerExpired);
-    socketService.onError(handleError);
-
-    // Initialize draft
+    // Initialize draft first (this connects the socket)
     initializeDraft();
+
+    // Setup listeners after socket connection
+    setTimeout(() => {
+      socketService.onDraftStateUpdate(handleDraftStateUpdate);
+      socketService.onDraftComplete(handleDraftComplete);
+      socketService.onPendingSelectionUpdate(handlePendingSelectionUpdate);
+      socketService.onTeamReorder(handleTeamReorder);
+      socketService.onTimerExpired(handleTimerExpired);
+      socketService.onError(handleError);
+    }, 100);
 
     // Cleanup function
     return () => {
@@ -235,6 +271,22 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
     clearPendingSelection();
   }, [draftId, canMakeSelection, toast, clearPendingSelection]);
 
+  // Create throttled version for socket calls to prevent spam
+  const throttledSocketPendingSelection = useCallback(
+    throttleWithImmediate(
+      // Immediate UI update - runs every time for responsive feel
+      (champion: Champion, team: Team) => {
+        updatePendingSelection(champion, team);
+      },
+      // Throttled socket call - prevents server spam
+      (champion: Champion, team: Team) => {
+        socketService.setPendingSelection(draftId, champion, team);
+      },
+      150 // 150ms throttle - allows max ~6-7 updates per second
+    ),
+    [draftId, updatePendingSelection]
+  );
+
   const setPendingSelection = useCallback((champion: Champion) => {
     const team = currentTeamRef.current;
     if (!draftId || !team || team === 'SPECTATOR' || team === 'BROADCAST') {
@@ -250,9 +302,9 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       return;
     }
 
-    socketService.setPendingSelection(draftId, champion, team);
-    updatePendingSelection(champion, team);
-  }, [draftId, canMakeSelection, toast, updatePendingSelection]);
+    // Use throttled version to prevent UI lag and server spam
+    throttledSocketPendingSelection(champion, team);
+  }, [draftId, canMakeSelection, toast, throttledSocketPendingSelection]);
 
   const confirmSelection = useCallback(() => {
     if (draftState.pendingChampion) {

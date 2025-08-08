@@ -32,6 +32,8 @@ export class SocketHandler {
     this.timerService.on('phaseExpired', this.handlePhaseExpired.bind(this));
     this.timerService.on('swapPhaseUpdate', this.handleSwapPhaseUpdate.bind(this));
     this.timerService.on('swapPhaseComplete', this.handleSwapPhaseComplete.bind(this));
+    this.timerService.on('timerStarted', this.handleTimerStarted.bind(this));
+    this.timerService.on('timerCleared', this.handleTimerCleared.bind(this));
   }
 
   private handleConnection(socket: Socket): void {
@@ -71,14 +73,41 @@ export class SocketHandler {
       try {
         console.log('Joining draft:', data);
         
-        const session = this.sessionManager.getSession(data.draftId);
-        const resolvedTeam = resolveTeamSide(data.team as string, session);
+        let session = this.sessionManager.getSession(data.draftId);
+        
+        // If session doesn't exist, create it with default names
+        if (!session) {
+          console.log(`🏗️ joinDraft: Session doesn't exist, creating with defaults for ${data.draftId}`);
+          session = this.sessionManager.createSession(data.draftId, 'Blue Team', 'Red Team');
+        }
+        
+        let resolvedTeam = resolveTeamSide(data.team as string, session);
+        
+        // If team couldn't be resolved and it's not a standard role, try to assign it as a custom team name
+        if (!resolvedTeam) {
+          const teamInput = data.team as string;
+          const isStandardRole = ['blue', 'red', 'spectator', 'broadcast'].includes(teamInput.toLowerCase());
+          
+          if (!isStandardRole) {
+            // Try to assign this as a custom team name
+            try {
+              const assignedTeam = this.sessionManager.assignTeamName(data.draftId, teamInput);
+              if (assignedTeam) {
+                resolvedTeam = assignedTeam;
+                console.log(`Assigned custom team name "${teamInput}" to ${assignedTeam}`);
+              }
+            } catch (error) {
+              console.log(`⚠️ joinDraft: Could not assign team name "${teamInput}":`, error instanceof Error ? error.message : error);
+            }
+          }
+        }
         
         console.log('Resolved team:', { input: data.team, resolved: resolvedTeam });
         
         currentDraftId = data.draftId;
         currentTeam = resolvedTeam;
         socket.join(data.draftId);
+        console.log(`🏠 Client ${socket.id} joined room ${data.draftId} as ${resolvedTeam}`);
         
         this.updateClientInfo(socket.id, resolvedTeam, data.draftId);
 
@@ -275,10 +304,39 @@ export class SocketHandler {
     // Could add additional cleanup or notifications here
   }
 
+  private handleTimerStarted(draftId: string, startTime: number, duration: number): void {
+    console.log(`Timer started for draft ${draftId}:`, { startTime, duration });
+    
+    // Update session with timer state
+    this.sessionManager.updateTimerState(draftId, startTime, duration, true);
+    
+    // Broadcast updated state with timer sync
+    this.broadcastSessionState(draftId);
+  }
+
+  private handleTimerCleared(draftId: string): void {
+    console.log(`Timer cleared for draft ${draftId}`);
+    
+    // Update session to clear timer state
+    this.sessionManager.updateTimerState(draftId, null, null, false);
+    
+    // Broadcast updated state
+    this.broadcastSessionState(draftId);
+  }
+
   private broadcastSessionState(draftId: string): void {
     const session = this.sessionManager.getSession(draftId);
     if (session) {
-      this.io.to(draftId).emit('draftStateUpdate', this.cleanSessionForClient(session));
+      const cleanedSession = this.cleanSessionForClient(session);
+      console.log(`📡 Broadcasting state for ${draftId}:`, {
+        blueTeamName: cleanedSession.blueTeamName,
+        redTeamName: cleanedSession.redTeamName,
+        blueConnected: cleanedSession.blueConnected,
+        redConnected: cleanedSession.redConnected,
+        blueReady: cleanedSession.blueReady,
+        redReady: cleanedSession.redReady
+      });
+      this.io.to(draftId).emit('draftStateUpdate', cleanedSession);
     }
   }
 

@@ -69,7 +69,7 @@ class SocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('✅ Socket connected successfully');
+      console.log('✅ Socket connected successfully', { socketId: this.socket?.id });
       this.reconnectAttempts = 0;
       this.isManuallyDisconnected = false;
       this.emit('connectionStatusChange', 'connected');
@@ -142,6 +142,7 @@ class SocketService {
       return;
     }
 
+    console.log(`🎧 Setting up listener for ${event}`);
     this.socket.on(event as string, callback as any);
     
     // Store listener for cleanup

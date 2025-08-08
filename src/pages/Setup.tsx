@@ -143,14 +143,14 @@ const Setup = () => {
                   </div>
                   <div className="relative">
                     <code className="text-xs text-blue-200/70 break-all block p-2 pr-10 rounded bg-blue-950/30">
-                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}` : 'Link will appear here...'}
+                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}` : 'Link will appear here...'}
                     </code>
                     {draftId && (
                       <button
-                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}`)}
+                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}`)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-blue-900/30 rounded transition-colors"
                       >
-                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}` ? (
+                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(blueTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}` ? (
                           <Check className="h-4 w-4 text-green-400" />
                         ) : (
                           <Copy className="h-4 w-4 text-blue-400" />
@@ -168,14 +168,14 @@ const Setup = () => {
                   </div>
                   <div className="relative">
                     <code className="text-xs text-red-200/70 break-all block p-2 pr-10 rounded bg-red-950/30">
-                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}` : 'Link will appear here...'}
+                      {draftId ? `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}` : 'Link will appear here...'}
                     </code>
                     {draftId && (
                       <button
-                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}`)}
+                        onClick={() => handleCopyLink(`${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}`)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-red-900/30 rounded transition-colors"
                       >
-                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}` ? (
+                        {copiedLink === `${window.location.origin}/draft/${draftId}?team=${encodeURIComponent(redTeamName)}&blue=${encodeURIComponent(blueTeamName)}&red=${encodeURIComponent(redTeamName)}` ? (
                           <Check className="h-4 w-4 text-green-400" />
                         ) : (
                           <Copy className="h-4 w-4 text-red-400" />
