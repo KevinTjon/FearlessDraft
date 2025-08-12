@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { SessionManager } from './services/SessionManager.js';
 import { DraftService } from './services/DraftService.js';
 import { TimerService } from './services/TimerService.js';
@@ -11,9 +13,28 @@ import { SocketHandler } from './handlers/SocketHandler.js';
 const app = express();
 const httpServer = createServer(app);
 
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Enable CORS for all routes
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the frontend build in production
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // Configure Socket.IO with CORS
 const io = new Server(httpServer, {

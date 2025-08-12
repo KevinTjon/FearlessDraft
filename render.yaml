@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fearless-draft-arena
+    env: node
+    plan: free
+    buildCommand: npm run build:all
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true
