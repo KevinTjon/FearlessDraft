@@ -12,8 +12,9 @@
     "setup": "node scripts/setup.js",
     "dev:full": "node scripts/dev.js",
     "dev:server": "cd server && npm run dev",
-    "build:all": "npm run build:shared && npm run build:server && npm run build",
-    "build:shared": "cd shared && npm run build",
+    "postinstall": "npm run build:shared",
+    "build:all": "npm install && npm run build:shared && cd server && npm install && cd .. && npm run build:server && npm run build",
+    "build:shared": "cd shared && npm install && npm run build",
     "build:server": "cd server && npm run build",
     "start:prod": "cd server && npm start",
     "deploy:prepare": "node scripts/deploy.js"

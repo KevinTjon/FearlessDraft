@@ -163,7 +163,7 @@ export class TimerService extends EventEmitter {
       this.clearSwapTimer(draftId);
     }
 
-    this.removeAllListeners();
+    super.removeAllListeners();
   }
 }
 

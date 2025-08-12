@@ -1,7 +1,7 @@
 // Main server entry point - clean and modular
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,7 +27,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(distPath));
   
   // Handle client-side routing - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
+  app.get('*', (req: Request, res: Response) => {
     // Skip API routes
     if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
       return res.status(404).json({ error: 'API endpoint not found' });
@@ -57,7 +57,7 @@ const timerService = new TimerService();
 const socketHandler = new SocketHandler(io, sessionManager, draftService, timerService);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   const stats = socketHandler.getStats();
   res.json({
     status: 'healthy',
@@ -67,7 +67,7 @@ app.get('/health', (req, res) => {
 });
 
 // API endpoint to get session info (useful for debugging)
-app.get('/api/sessions/:draftId', (req, res) => {
+app.get('/api/sessions/:draftId', (req: Request, res: Response) => {
   const session = sessionManager.getSession(req.params.draftId);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
@@ -76,7 +76,7 @@ app.get('/api/sessions/:draftId', (req, res) => {
 });
 
 // API endpoint to get all sessions (admin/debug use)
-app.get('/api/sessions', (req, res) => {
+app.get('/api/sessions', (req: Request, res: Response) => {
   const sessions = sessionManager.getAllSessions();
   res.json({
     count: sessions.length,

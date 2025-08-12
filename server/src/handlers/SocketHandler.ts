@@ -23,7 +23,7 @@ export class SocketHandler {
   }
 
   private setupEventListeners(): void {
-    this.io.on('connection', (socket) => {
+    this.io.on('connection', (socket: Socket) => {
       console.log(`Client connected: ${socket.id}`);
       this.handleConnection(socket);
     });
@@ -438,6 +438,8 @@ export class SocketHandler {
       code = error.code;
     } else if (error instanceof Error) {
       message = error.message;
+    } else if (typeof error === 'string') {
+      message = error;
     }
 
     socket.emit('error', { message, code });
