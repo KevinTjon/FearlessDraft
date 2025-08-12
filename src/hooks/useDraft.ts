@@ -174,11 +174,7 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       
       if (newGameNumber > currentGameNumber && newState.inProgress) {
         console.log(`🎮 Game ${newGameNumber} started! (was Game ${currentGameNumber})`);
-        toast({
-          title: `🎯 Game ${newGameNumber} Started!`,
-          description: `Fearless Draft with ${newState.fearlessBans?.length || 0} banned champions`,
-          duration: 3000,
-        });
+        // Toast notification removed per user request
       }
 
       setDraftState(newState);
@@ -189,10 +185,7 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       console.log('Draft completed:', finalState);
       setDraftState({ ...finalState, isDraftComplete: true });
       
-      toast({
-        title: 'Draft Complete!',
-        description: 'The champion draft has been completed.',
-      });
+      // Toast notification removed per user request
     };
 
     // Pending selection updates

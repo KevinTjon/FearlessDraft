@@ -22,11 +22,7 @@ const Setup = () => {
   const handleCopyLink = (link: string) => {
     navigator.clipboard.writeText(link).then(() => {
       setCopiedLink(link);
-      toast({
-        title: "Link copied!",
-        description: "The link has been copied to your clipboard",
-        duration: 2000
-      });
+      // Toast notification removed per user request
       // Reset the copied state after 2 seconds
       setTimeout(() => setCopiedLink(null), 2000);
     });
@@ -56,10 +52,7 @@ const Setup = () => {
     
     sessionStorage.setItem(`draft_${newDraftId}`, JSON.stringify(draftData));
     
-    toast({
-      title: "Draft created!",
-      description: "Share the links with team captains and spectators to begin"
-    });
+    // Toast notification removed per user request
   };
 
   return (
