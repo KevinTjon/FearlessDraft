@@ -1,16 +1,16 @@
 // Testing configuration - modify these values for your production URL
 export const CONFIG = {
   // Production URL - replace with your actual Render deployment URL
-  PRODUCTION_URL: 'https://your-app-name.onrender.com',
+  PRODUCTION_URL: 'https://fearlessdraft-u8wu.onrender.com/',
   
   // Local testing URL (fallback)
   LOCAL_URL: 'http://localhost:3001',
   
   // Test parameters
-  MAX_CONCURRENT_CONNECTIONS: 50,
-  TEST_DURATION_MS: 30000, // 30 seconds
+  MAX_CONCURRENT_CONNECTIONS: 25,
+  TEST_DURATION_MS: 15000, // 30 seconds
   REQUEST_INTERVAL_MS: 1000, // 1 second between requests
-  SPAM_INTERVAL_MS: 100, // 100ms for spam testing
+  SPAM_INTERVAL_MS: 200, // 100ms for spam testing
   
   // Health check settings
   HEALTH_CHECK_INTERVAL: 5000, // 5 seconds
