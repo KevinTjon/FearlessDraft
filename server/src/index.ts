@@ -21,21 +21,6 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from the frontend build in production
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../../dist');
-  app.use(express.static(distPath));
-  
-  // Handle client-side routing - serve index.html for all non-API routes
-  app.get('*', (req: Request, res: Response) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
-      return res.status(404).json({ error: 'API endpoint not found' });
-    }
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
-
 // Configure Socket.IO with CORS
 const io = new Server(httpServer, {
   cors: {
@@ -92,6 +77,17 @@ app.get('/api/sessions', (req: Request, res: Response) => {
     }))
   });
 });
+
+// Serve static files from the frontend build in production (AFTER API routes)
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req: Request, res: Response) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // Graceful shutdown handling
 const cleanup = () => {
