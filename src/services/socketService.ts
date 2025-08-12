@@ -216,6 +216,14 @@ class SocketService {
     this.emitToServer('reorderTeam', { draftId, team, sourceIndex, targetIndex });
   }
 
+  chooseSide(draftId: string, team: Team, sideChoice: 'BLUE' | 'RED'): void {
+    this.emitToServer('chooseSide', { draftId, team, sideChoice });
+  }
+
+  toggleNextGameReady(draftId: string, team: Team): void {
+    this.emitToServer('toggleNextGameReady', { draftId, team });
+  }
+
   // Event listeners
   onDraftStateUpdate(callback: SocketEventCallback<'draftStateUpdate'>): void {
     this.onFromServer('draftStateUpdate', callback);
@@ -275,6 +283,19 @@ class SocketService {
 
   offError(callback?: SocketEventCallback<'error'>): void {
     this.offFromServer('error', callback);
+  }
+
+  onNextGameDraftReady(callback: SocketEventCallback<'nextGameDraftReady'>): void {
+    console.log('🎧 Setting up nextGameDraftReady listener');
+    const wrappedCallback = (data: any) => {
+      console.log('📨📨📨 RECEIVED nextGameDraftReady EVENT 📨📨📨', data);
+      callback(data);
+    };
+    this.onFromServer('nextGameDraftReady', wrappedCallback as any);
+  }
+
+  offNextGameDraftReady(callback?: SocketEventCallback<'nextGameDraftReady'>): void {
+    this.offFromServer('nextGameDraftReady', callback);
   }
 
   /**

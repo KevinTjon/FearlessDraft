@@ -152,7 +152,11 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
         blueConnected: newState.blueConnected,
         redConnected: newState.redConnected,
         blueReady: newState.blueReady,
-        redReady: newState.redReady
+        redReady: newState.redReady,
+        gameNumber: newState.gameNumber,
+        fearlessBansCount: newState.fearlessBans?.length || 0,
+        inProgress: newState.inProgress,
+        allKeys: Object.keys(newState)
       });
       
       // Resolve team if not yet resolved
@@ -162,6 +166,19 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
           currentTeamRef.current = resolvedTeam;
           socketService.joinDraft(draftId, resolvedTeam);
         }
+      }
+
+      // Check if this is a transition to a new game (Game 2+)
+      const currentGameNumber = draftState?.gameNumber || 1;
+      const newGameNumber = newState?.gameNumber || 1;
+      
+      if (newGameNumber > currentGameNumber && newState.inProgress) {
+        console.log(`🎮 Game ${newGameNumber} started! (was Game ${currentGameNumber})`);
+        toast({
+          title: `🎯 Game ${newGameNumber} Started!`,
+          description: `Fearless Draft with ${newState.fearlessBans?.length || 0} banned champions`,
+          duration: 3000,
+        });
       }
 
       setDraftState(newState);
@@ -210,6 +227,9 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
     // Initialize draft first (this connects the socket)
     initializeDraft();
 
+    // No longer needed - session updates in-place instead of navigation
+    // const handleNextGameDraftReady = (data: any) => { ... }
+
     // Setup listeners after socket connection
     setTimeout(() => {
       socketService.onDraftStateUpdate(handleDraftStateUpdate);
@@ -218,6 +238,10 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       socketService.onTeamReorder(handleTeamReorder);
       socketService.onTimerExpired(handleTimerExpired);
       socketService.onError(handleError);
+      
+      // Listen for next game draft ready event
+      // No longer needed - session updates in-place
+      // socketService.onNextGameDraftReady(handleNextGameDraftReady);
     }, 100);
 
     // Cleanup function
@@ -228,8 +252,10 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
       socketService.offTeamReorder(handleTeamReorder);
       socketService.offTimerExpired(handleTimerExpired);
       socketService.offError(handleError);
+      // No longer needed - session updates in-place
+      // socketService.offNextGameDraftReady(handleNextGameDraftReady);
     };
-  }, [draftId, teamFromUrl, autoConnect, initializeDraft, setDraftState, updatePendingSelection, reorderTeamPicks, setError, toast]);
+  }, [draftId, teamFromUrl, autoConnect, initializeDraft, setDraftState, updatePendingSelection, reorderTeamPicks, setError, toast, navigate]);
 
   /**
    * Cleanup on unmount
@@ -320,6 +346,24 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
     socketService.reorderTeam(draftId, team, sourceIndex, targetIndex);
   }, [draftId, uiState.isDraftComplete]);
 
+  const chooseSide = useCallback((sideChoice: 'BLUE' | 'RED') => {
+    const team = currentTeamRef.current;
+    if (!draftId || !team || team === 'SPECTATOR' || team === 'BROADCAST') {
+      return;
+    }
+    
+    socketService.chooseSide(draftId, team, sideChoice);
+  }, [draftId]);
+
+  const toggleNextGameReady = useCallback(() => {
+    const team = currentTeamRef.current;
+    if (!draftId || !team || team === 'SPECTATOR' || team === 'BROADCAST') {
+      return;
+    }
+    
+    socketService.toggleNextGameReady(draftId, team);
+  }, [draftId]);
+
   return {
     // State
     draftState,
@@ -337,6 +381,8 @@ export function useDraft({ draftId, teamFromUrl, autoConnect = true }: UseDraftO
     setPendingSelection,
     confirmSelection,
     reorderTeam,
+    chooseSide,
+    toggleNextGameReady,
     
     // Utilities
     isChampionSelected,

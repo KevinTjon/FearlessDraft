@@ -162,7 +162,213 @@ export class DraftService {
   updateSwapPhase(session: DraftSession, timeLeft: number, canSwap: boolean): DraftSession {
     session.swapTimeLeft = timeLeft;
     session.canSwap = canSwap;
+    
+    // Transition to post-draft phase when swap phase ends
+    if (timeLeft <= 0) {
+      session.isSwapPhase = false;
+      session.isPostDraft = true;
+    }
+    
     return session;
+  }
+
+  /**
+   * Choose side for game 2 (or deselect if same side is chosen again)
+   */
+  chooseSide(session: DraftSession, team: Team, sideChoice: 'BLUE' | 'RED'): DraftSession {
+    if (!session.isPostDraft) {
+      throw new Error('Can only choose sides during post-draft phase');
+    }
+
+    const currentChoice = team === 'BLUE' ? session.blueSideChoice : session.redSideChoice;
+    
+    // If the team is choosing the same side they already have, deselect it
+    if (currentChoice === sideChoice) {
+      if (team === 'BLUE') {
+        session.blueSideChoice = null;
+        session.blueNextGameReady = false; // Clear ready status when deselecting
+      } else if (team === 'RED') {
+        session.redSideChoice = null;
+        session.redNextGameReady = false; // Clear ready status when deselecting
+      }
+      console.log(`Team ${team} deselected ${sideChoice} side`);
+      return session;
+    }
+
+    // Validate that the other team hasn't already chosen this side
+    const otherTeam = team === 'BLUE' ? 'RED' : 'BLUE';
+    const otherTeamChoice = team === 'BLUE' ? session.redSideChoice : session.blueSideChoice;
+    
+    if (otherTeamChoice === sideChoice) {
+      throw new Error(`${sideChoice} side is already taken by ${otherTeam} team`);
+    }
+
+    // Clear ready status if team changes their side choice
+    if (currentChoice && currentChoice !== sideChoice) {
+      if (team === 'BLUE') {
+        session.blueNextGameReady = false;
+      } else {
+        session.redNextGameReady = false;
+      }
+    }
+
+    if (team === 'BLUE') {
+      session.blueSideChoice = sideChoice;
+    } else if (team === 'RED') {
+      session.redSideChoice = sideChoice;
+    } else {
+      throw new Error('Invalid team for side selection');
+    }
+
+    console.log(`Team ${team} chose ${sideChoice} side for game 2`);
+    return session;
+  }
+
+  /**
+   * Toggle next game ready state
+   */
+  toggleNextGameReady(session: DraftSession, team: Team): DraftSession {
+    if (!session.isPostDraft) {
+      throw new Error('Can only ready up during post-draft phase');
+    }
+
+    // Check if team has chosen a side
+    const hasSideChoice = team === 'BLUE' ? session.blueSideChoice : session.redSideChoice;
+    if (!hasSideChoice) {
+      throw new Error('Must choose a side before readying up');
+    }
+
+    if (team === 'BLUE') {
+      session.blueNextGameReady = !session.blueNextGameReady;
+    } else if (team === 'RED') {
+      session.redNextGameReady = !session.redNextGameReady;
+    } else {
+      throw new Error('Invalid team for ready toggle');
+    }
+
+    console.log(`Team ${team} ${session.blueNextGameReady || session.redNextGameReady ? 'readied up' : 'cancelled ready'} for next game`);
+    
+    // Check if both teams are ready for next game
+    if (session.blueNextGameReady && session.redNextGameReady) {
+      console.log(`Both teams ready for next game! Session: ${session.id}`);
+      // Next game will be triggered by the socket handler
+    }
+
+    return session;
+  }
+
+  /**
+   * Transition current session to next game state (in-place)
+   */
+  transitionToNextGame(session: DraftSession, nextGameData: {
+    blueSide: Team;
+    redSide: Team;
+    blueTeamName: string;
+    redTeamName: string;
+    fearlessBans: Champion[];
+    gameNumber: number;
+  }): void {
+    console.log(`🔄 Transitioning session ${session.id} from Game ${session.gameNumber} to Game ${nextGameData.gameNumber}`);
+    
+    // Reset draft state but keep team connections
+    session.blueReady = true; // Auto-ready for fearless draft
+    session.redReady = true;
+    session.inProgress = true; // Start immediately
+    session.currentPhaseIndex = 0;
+    
+    // Clear picks and bans from previous game
+    session.bluePicks = [];
+    session.redPicks = [];
+    session.blueBans = [];
+    session.redBans = [];
+    
+    // Clear pending selections
+    session.pendingChampion = null;
+    session.pendingTeam = null;
+    
+    // Reset swap phase
+    session.isSwapPhase = false;
+    session.swapTimeLeft = 300; // 5 minutes
+    session.canSwap = true;
+    
+    // Reset timer fields
+    session.phaseStartTime = null;
+    session.phaseTimeLeft = null;
+    session.phaseTimerActive = false;
+    
+    // Reset post-draft state
+    session.isPostDraft = false;
+    session.blueSideChoice = null;
+    session.redSideChoice = null;
+    session.blueNextGameReady = false;
+    session.redNextGameReady = false;
+    
+    // Update team names based on side choices
+    session.blueTeamName = nextGameData.blueTeamName;
+    session.redTeamName = nextGameData.redTeamName;
+    
+    // Update fearless draft data
+    session.fearlessBans = nextGameData.fearlessBans;
+    session.gameNumber = nextGameData.gameNumber;
+    
+    console.log(`✅ Session transitioned: Game ${session.gameNumber}, ${session.fearlessBans.length} fearless bans`);
+  }
+
+  /**
+   * Create next game draft session data
+   */
+  createNextGameDraft(originalSession: DraftSession): { 
+    nextGameDraftId: string; 
+    blueSide: Team; 
+    redSide: Team;
+    blueTeamName: string;
+    redTeamName: string;
+    fearlessBans: Champion[];
+    gameNumber: number;
+  } {
+    if (!originalSession.isPostDraft || !originalSession.blueNextGameReady || !originalSession.redNextGameReady) {
+      throw new Error('Cannot create next game draft: teams not ready');
+    }
+
+    if (!originalSession.blueSideChoice || !originalSession.redSideChoice) {
+      throw new Error('Cannot create next game draft: side choices not complete');
+    }
+
+    const nextGameDraftId = `${originalSession.id}-next`;
+    
+    // Determine which team gets which side in next game
+    const blueSide = originalSession.blueSideChoice === 'BLUE' ? 'BLUE' : 'RED';
+    const redSide = originalSession.redSideChoice === 'BLUE' ? 'BLUE' : 'RED';
+    
+    // Team names for next game (swap if sides are swapped)
+    const blueTeamName = blueSide === 'BLUE' ? originalSession.blueTeamName : originalSession.redTeamName;
+    const redTeamName = redSide === 'RED' ? originalSession.redTeamName : originalSession.blueTeamName;
+
+    // Prepare fearless bans - combine previous fearless bans with current draft bans
+    const currentDraftBans = [...originalSession.blueBans, ...originalSession.redBans];
+    const fearlessBans = [...originalSession.fearlessBans, ...currentDraftBans];
+    const gameNumber = originalSession.gameNumber + 1;
+
+    console.log(`Creating next game draft:`, {
+      originalId: originalSession.id,
+      nextGameDraftId,
+      blueSide,
+      redSide,
+      blueTeamName,
+      redTeamName,
+      fearlessBansCount: fearlessBans.length,
+      gameNumber
+    });
+
+    return {
+      nextGameDraftId,
+      blueSide,
+      redSide,
+      blueTeamName,
+      redTeamName,
+      fearlessBans,
+      gameNumber
+    };
   }
 
   /**

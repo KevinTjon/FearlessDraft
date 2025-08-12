@@ -89,6 +89,17 @@ export interface DraftSession {
   phaseStartTime: number | null; // Timestamp when current phase timer started
   phaseTimeLeft: number | null;  // Seconds left in current phase (null if no active timer)
   phaseTimerActive: boolean;     // Whether phase timer is currently running
+  
+  // Post-draft next game preparation fields
+  isPostDraft: boolean;          // Whether we're in post-draft phase for next game prep
+  blueSideChoice: 'BLUE' | 'RED' | null; // Blue team's side choice for next game
+  redSideChoice: 'BLUE' | 'RED' | null;  // Red team's side choice for next game
+  blueNextGameReady: boolean;    // Blue team ready for next game draft
+  redNextGameReady: boolean;     // Red team ready for next game draft
+  
+  // Fearless Draft system - champions banned in previous games that remain banned
+  fearlessBans: Champion[];      // All champions banned in previous drafts (cumulative)
+  gameNumber: number;            // Which game this is in the series (1, 2, 3, etc.)
 }
 
 // Socket event schemas for type safety
@@ -98,6 +109,8 @@ export interface SocketEvents {
     draftId: string;
     blueTeamName: string;
     redTeamName: string;
+    fearlessBans?: Champion[];    // Optional fearless bans from previous games
+    gameNumber?: number;          // Optional game number (defaults to 1)
   };
   
   joinDraft: {
@@ -129,6 +142,17 @@ export interface SocketEvents {
     targetIndex: number;
   };
   
+  chooseSide: {
+    draftId: string;
+    team: Team;
+    sideChoice: 'BLUE' | 'RED';
+  };
+  
+  toggleNextGameReady: {
+    draftId: string;
+    team: Team;
+  };
+  
   // Server to Client events
   draftStateUpdate: DraftSession;
   
@@ -153,6 +177,13 @@ export interface SocketEvents {
     message: string;
     code?: string;
   };
+  
+  nextGameDraftReady: {
+    draftId: string;
+    nextGameDraftId: string;
+    blueSide: Team; // Which team chose blue side
+    redSide: Team;  // Which team chose red side
+  };
 }
 
 // Configuration constants
@@ -168,5 +199,5 @@ export const DRAFT_CONFIG = {
 
 // Utility types for better type safety
 export type DraftEventType = keyof SocketEvents;
-export type ClientEvents = Pick<SocketEvents, 'createDraft' | 'joinDraft' | 'toggleReady' | 'selectChampion' | 'setPendingSelection' | 'reorderTeam'>;
-export type ServerEvents = Pick<SocketEvents, 'draftStateUpdate' | 'draftComplete' | 'pendingSelectionUpdate' | 'teamReorder' | 'timerExpired' | 'error'>;
+export type ClientEvents = Pick<SocketEvents, 'createDraft' | 'joinDraft' | 'toggleReady' | 'selectChampion' | 'setPendingSelection' | 'reorderTeam' | 'chooseSide' | 'toggleNextGameReady'>;
+export type ServerEvents = Pick<SocketEvents, 'draftStateUpdate' | 'draftComplete' | 'pendingSelectionUpdate' | 'teamReorder' | 'timerExpired' | 'error' | 'nextGameDraftReady'>;

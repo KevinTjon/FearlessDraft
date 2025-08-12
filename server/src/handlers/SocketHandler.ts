@@ -50,7 +50,9 @@ export class SocketHandler {
         const session = this.sessionManager.createSession(
           data.draftId,
           data.blueTeamName,
-          data.redTeamName
+          data.redTeamName,
+          data.fearlessBans || [],
+          data.gameNumber || 1
         );
 
         // Update connection status if client has a team
@@ -218,6 +220,13 @@ export class SocketHandler {
           throw new Error('Session not found');
         }
 
+        // Security check: Only allow teams to reorder their own champions
+        // If it's not their team, silently ignore the request instead of throwing an error
+        if (currentTeam !== data.team) {
+          console.log(`Team ${currentTeam} attempted to reorder ${data.team} champions - ignoring request`);
+          return; // Just return without doing anything - no error popup for user
+        }
+
         this.draftService.reorderTeam(session, data.team, data.sourceIndex, data.targetIndex);
 
         // Broadcast reorder event
@@ -231,6 +240,72 @@ export class SocketHandler {
 
       } catch (error) {
         this.handleError(socket, error, 'REORDER_ERROR');
+      }
+    });
+
+    socket.on('chooseSide', (data: SocketEvents['chooseSide']) => {
+      try {
+        const session = this.sessionManager.getSession(data.draftId);
+        if (!session) {
+          throw new Error('Session not found');
+        }
+
+        // Security check: Only allow teams to choose their own side
+        if (currentTeam !== data.team) {
+          throw new Error(`Team ${currentTeam} cannot choose side for ${data.team}`);
+        }
+
+        this.draftService.chooseSide(session, data.team, data.sideChoice);
+        this.broadcastSessionState(data.draftId);
+
+      } catch (error) {
+        this.handleError(socket, error, 'CHOOSE_SIDE_ERROR');
+      }
+    });
+
+    socket.on('toggleNextGameReady', (data: SocketEvents['toggleNextGameReady']) => {
+      try {
+        const session = this.sessionManager.getSession(data.draftId);
+        if (!session) {
+          throw new Error('Session not found');
+        }
+
+        this.draftService.toggleNextGameReady(session, data.team);
+        this.broadcastSessionState(data.draftId);
+
+        // Check if both teams are ready to start next game
+        if (session.blueNextGameReady && session.redNextGameReady) {
+          console.log(`🎮 Both teams ready for next game! Draft: ${data.draftId}`);
+          
+          try {
+            // Transition current session to next game instead of creating new session
+            const nextGameData = this.draftService.createNextGameDraft(session);
+            
+            console.log(`🔄 Transitioning session ${data.draftId} to next game (Game ${nextGameData.gameNumber})`);
+            
+            // Update current session to next game state
+            this.draftService.transitionToNextGame(session, nextGameData);
+            
+            console.log(`✅ Session transitioned to Game ${session.gameNumber} with ${session.fearlessBans.length} fearless bans`);
+            
+            // Start the phase timer for the new game
+            console.log(`🚀 Starting phase timer for Game ${session.gameNumber}`);
+            this.timerService.startPhaseTimer(data.draftId, 0);
+            
+            // Small delay to ensure clean broadcast after transition
+            setTimeout(() => {
+              console.log(`📡 Final broadcast after transition for Game ${session.gameNumber}`);
+              this.broadcastSessionState(data.draftId);
+            }, 100);
+            
+          } catch (error) {
+            console.error('Failed to transition to next game:', error);
+            this.handleError(socket, error, 'NEXT_GAME_CREATION_ERROR');
+          }
+        }
+
+      } catch (error) {
+        this.handleError(socket, error, 'TOGGLE_NEXT_GAME_READY_ERROR');
       }
     });
 
@@ -334,7 +409,10 @@ export class SocketHandler {
         blueConnected: cleanedSession.blueConnected,
         redConnected: cleanedSession.redConnected,
         blueReady: cleanedSession.blueReady,
-        redReady: cleanedSession.redReady
+        redReady: cleanedSession.redReady,
+        gameNumber: cleanedSession.gameNumber,
+        fearlessBansCount: cleanedSession.fearlessBans?.length || 0,
+        inProgress: cleanedSession.inProgress
       });
       this.io.to(draftId).emit('draftStateUpdate', cleanedSession);
     }

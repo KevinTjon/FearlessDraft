@@ -63,6 +63,17 @@ const initialState: Omit<DraftStore, 'setDraftState' | 'setLoading' | 'setError'
   phaseTimeLeft: null,
   phaseTimerActive: false,
   
+  // Post-draft next game preparation fields
+  isPostDraft: false,
+  blueSideChoice: null,
+  redSideChoice: null,
+  blueNextGameReady: false,
+  redNextGameReady: false,
+  
+  // Fearless Draft system
+  fearlessBans: [],
+  gameNumber: 1,
+  
   // UI state
   isLoading: true,
   error: null,
@@ -79,11 +90,29 @@ export const useDraftStore = create<DraftStore>()(
 
     setDraftState: (state) => {
       set((current) => {
+        console.log('🏪 DraftStore setDraftState called:', {
+          incomingGameNumber: state.gameNumber,
+          incomingFearlessBansCount: state.fearlessBans?.length || 0,
+          currentGameNumber: current.gameNumber,
+          currentFearlessBansCount: current.fearlessBans?.length || 0,
+          incomingKeys: Object.keys(state)
+        });
+        
         const newState = { ...current, ...state };
+        
+        console.log('🏪 DraftStore after merge:', {
+          finalGameNumber: newState.gameNumber,
+          finalFearlessBansCount: newState.fearlessBans?.length || 0
+        });
         
         // Update isDraftComplete based on phase index
         if (state.currentPhaseIndex !== undefined) {
           newState.isDraftComplete = state.currentPhaseIndex >= draftSequence.length;
+        }
+        
+        // Transition to post-draft phase when swap phase ends
+        if (newState.isDraftComplete && !newState.isSwapPhase && !newState.isPostDraft) {
+          newState.isPostDraft = true;
         }
         
         return newState;
@@ -187,6 +216,15 @@ export const selectDraftState = (state: DraftStore) => ({
   phaseStartTime: state.phaseStartTime,
   phaseTimeLeft: state.phaseTimeLeft,
   phaseTimerActive: state.phaseTimerActive,
+  // Post-draft next game preparation fields
+  isPostDraft: state.isPostDraft,
+  blueSideChoice: state.blueSideChoice,
+  redSideChoice: state.redSideChoice,
+  blueNextGameReady: state.blueNextGameReady,
+  redNextGameReady: state.redNextGameReady,
+  // Fearless Draft fields
+  fearlessBans: state.fearlessBans,
+  gameNumber: state.gameNumber,
 });
 
 export const selectUIState = (state: DraftStore) => ({

@@ -1,5 +1,5 @@
 // Session management service - handles draft session lifecycle
-import { DraftSession, DRAFT_CONFIG, validateDraftCreation } from '@champ-draft-arena/shared';
+import { DraftSession, Champion, DRAFT_CONFIG, validateDraftCreation } from '@champ-draft-arena/shared';
 
 export class SessionManager {
   private sessions = new Map<string, DraftSession>();
@@ -12,7 +12,7 @@ export class SessionManager {
   /**
    * Create a new draft session
    */
-  createSession(draftId: string, blueTeamName: string, redTeamName: string): DraftSession {
+  createSession(draftId: string, blueTeamName: string, redTeamName: string, fearlessBans: Champion[] = [], gameNumber: number = 1): DraftSession {
     console.log(`🏗️ createSession: Creating/updating session ${draftId}`, { blueTeamName, redTeamName });
     
     // Validate input parameters
@@ -71,7 +71,18 @@ export class SessionManager {
       // Initialize timer fields
       phaseStartTime: null,
       phaseTimeLeft: null,
-      phaseTimerActive: false
+      phaseTimerActive: false,
+      
+      // Initialize post-draft next game preparation fields
+      isPostDraft: false,
+      blueSideChoice: null,
+      redSideChoice: null,
+      blueNextGameReady: false,
+      redNextGameReady: false,
+      
+      // Initialize fearless draft fields
+      fearlessBans: fearlessBans || [],  // Champions banned in previous games
+      gameNumber: gameNumber || 1        // Which game this is in the series
     };
 
     this.sessions.set(draftId, session);
@@ -142,8 +153,12 @@ export class SessionManager {
     console.log(`Updated connection status for ${team} in session ${draftId}:`, {
       connected,
       blueConnected: session.blueConnected,
-      redConnected: session.redConnected
+      redConnected: session.redConnected,
+      gameNumber: session.gameNumber,
+      inProgress: session.inProgress
     });
+
+    // Auto-start logic removed - now handled by session transition
 
     return session;
   }

@@ -33,20 +33,24 @@ export function validateChampionSelection(
   }
 
   if (champion) {
-    // Check if champion is already selected
+    // Check if champion is already selected or banned (including fearless bans)
     const allSelectedChampions = [
       ...session.bluePicks,
       ...session.redPicks,
       ...session.blueBans,
-      ...session.redBans
+      ...session.redBans,
+      ...session.fearlessBans  // Include fearless bans from previous games
     ];
 
     const isAlreadySelected = allSelectedChampions.some(c => c.id === champion.id);
     if (isAlreadySelected) {
-      throw new DraftValidationError(
-        `${champion.name} is already selected or banned`,
-        'CHAMPION_ALREADY_SELECTED'
-      );
+      // Check if it's a fearless ban to provide more specific message
+      const isFearlessBan = session.fearlessBans.some(c => c.id === champion.id);
+      const message = isFearlessBan 
+        ? `${champion.name} was banned in a previous game (Fearless Draft)`
+        : `${champion.name} is already selected or banned`;
+      
+      throw new DraftValidationError(message, 'CHAMPION_ALREADY_SELECTED');
     }
   }
 }
