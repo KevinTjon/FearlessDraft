@@ -28,7 +28,14 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const connect = () => {
   if (socket) return socket;
 
-  socket = io('http://localhost:3001', {
+  // Use production URL in production, localhost in development
+  const socketUrl = import.meta.env.PROD 
+    ? window.location.origin 
+    : 'http://localhost:3001';
+  
+  console.log('Connecting to socket server at:', socketUrl);
+
+  socket = io(socketUrl, {
     reconnection: true,
     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
     reconnectionDelay: 1000,

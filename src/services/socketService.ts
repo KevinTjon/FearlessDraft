@@ -23,9 +23,14 @@ class SocketService {
       return this.socket;
     }
 
-    console.log('Connecting to socket server...');
+    // Use production URL in production, localhost in development
+    const socketUrl = import.meta.env.PROD 
+      ? window.location.origin 
+      : 'http://localhost:3001';
+    
+    console.log('Connecting to socket server at:', socketUrl);
 
-    this.socket = io('http://localhost:3001', {
+    this.socket = io(socketUrl, {
       reconnection: true,
       reconnectionAttempts: DRAFT_CONFIG.MAX_RECONNECT_ATTEMPTS,
       reconnectionDelay: DRAFT_CONFIG.RECONNECT_DELAY,
